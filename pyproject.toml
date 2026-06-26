@@ -9,6 +9,9 @@ dependencies = [
     "pyyaml>=6.0.0,<7.0.0",
 ]
 
+[project.scripts]
+retirement-engine = "retirement_engine.bootstrap:main"
+
 [tool.poetry]
 packages = [{ include = "retirement_engine", from = "src" }]
 version = "0.0.0"
@@ -43,3 +46,7 @@ select = ["E", "F", "I", "UP", "B"]
 python_version = "3.12"
 strict = true
 packages = ["retirement_engine"]
+
+[[tool.mypy.overrides]]
+module = ["openpyxl", "openpyxl.*"]
+ignore_missing_imports = true
