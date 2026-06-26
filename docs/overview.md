@@ -289,6 +289,7 @@ Repository structure is intentionally modular.
 
 * `env/` — configuration
 * `resources/` — workbook templates and static assets
+* `workbooks/` — local household workbooks, ignored by Git except for `.gitkeep`
 * `docs/` — project documentation
 * `src/` — application source code
 * `tests/` — automated tests
@@ -297,6 +298,11 @@ Repository structure is intentionally modular.
 * `build/` — generated artifacts (ephemeral)
 
 Business logic is organized into focused modules that separate workbook I/O, financial calculations, simulations, optimization, and reporting.
+
+`resources/workbooks/template.xlsx` is the blank workbook template.
+`resources/workbooks/example.xlsx` is a fake populated workbook used as the default
+development and testing workbook. Personal populated workbooks should live under
+`workbooks/`, not `resources/`.
 
 ---
 

@@ -1,12 +1,12 @@
+application_version: "0.1.0"
+supported_workbook_version: "0.1.0"
+
 # Default workbook to use when none is supplied on the CLI.
-default_workbook: ~/Documents/Retirement/my-retirement.xlsx
+default_workbook: "resources/workbooks/example.xlsx"
 
 # Default output directory.
-output_directory: build
-
-# Workbook schema expected by this version of the engine.
-required_workbook_version: 0.1.0
+output_directory: "build"
 
 reports:
-  default_format: pdf
+  default_format: "pdf"
   include_charts: true

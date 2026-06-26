@@ -1,11 +1,13 @@
 build/*
 !build/.gitkeep
 
-env/secrets.yml
+# Local/personal workbooks
+workbooks/*
+!workbooks/.gitkeep
 
 *.xlsx
-!resources/template.xlsx
-!resources/example.xlsx
+!resources/workbooks/template.xlsx
+!resources/workbooks/example.xlsx
 
 __pycache__/
 *.py[cod]
