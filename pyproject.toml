@@ -10,7 +10,7 @@ dependencies = [
 ]
 
 [project.scripts]
-retirement-engine = "retirement_engine.bootstrap:main"
+retirement-engine = "retirement_engine.cli:main"
 
 [tool.poetry]
 packages = [{ include = "retirement_engine", from = "src" }]

@@ -7,6 +7,10 @@ from retirement_engine.workbook.reader import (
     WorkbookSheet,
     load_retirement_workbook,
 )
+from retirement_engine.workbook.summary import (
+    WorkbookSummary,
+    summarize_retirement_workbook,
+)
 from retirement_engine.workbook.validation import (
     ValidationFailure,
     WorkbookSchema,
@@ -24,8 +28,10 @@ __all__ = [
     "WorkbookSchema",
     "WorkbookSchemaSheet",
     "WorkbookSheet",
+    "WorkbookSummary",
     "WorkbookValidationReport",
     "load_retirement_workbook",
     "load_schema_from_template",
+    "summarize_retirement_workbook",
     "validate_retirement_workbook",
 ]

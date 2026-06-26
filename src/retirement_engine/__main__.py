@@ -1,5 +1,5 @@
 """Command-line module entry point."""
 
-from retirement_engine.bootstrap import main
+from retirement_engine.cli import main
 
 raise SystemExit(main())
