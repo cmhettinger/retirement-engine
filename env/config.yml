@@ -1,4 +1,3 @@
-application_version: "0.1.0"
 supported_workbook_version: "0.1.0"
 
 # Default workbook to use when none is supplied on the CLI.

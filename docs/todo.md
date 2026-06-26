@@ -8,7 +8,7 @@
 
 | Order | Category | Task | Description | Status |
 |------:|----------|------|-------------|--------|
-| 0-A | Environment | Configuration framework | Implement configuration loading from `env/config.yml` and optional overrides from `env/secrets.yml`. Define the application's configuration model and validate required settings. Initially include items such as default workbook path, default output directory, report options, and workbook version expectations. | Not Started |
+| 0-A | Environment | Configuration framework | Implement configuration loading from `env/config.yml`. Define the application's configuration model and validate required settings. Initially include items such as supported workbook version, default workbook path, default output directory, and report options. | Complete |
 | 0-B | Environment | Application bootstrap | Implement application startup, configuration loading, logging, build directory creation, and common initialization. This provides a consistent entry point for all CLI commands before workbook processing begins. | Not Started |
 | 1 | Workbook | Workbook reader | Implement workbook loading for `template.xlsx`-compatible files using `openpyxl`. Parse each sheet into structured Python data without performing financial calculations. | Not Started |
 |     2 | Workbook      | Workbook validation               | Validate required sheets, required columns, workbook version, stable IDs, duplicate IDs, missing required rows, and invalid Yes/No fields. Return clear human-readable validation errors.                                             | Not Started |
