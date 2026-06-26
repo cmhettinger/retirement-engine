@@ -16,6 +16,8 @@ The long-term vision is to separate:
 
 The workbook is intended to serve as the primary data model for the engine.
 
+For workbook structure and template conventions, see [docs/workbook.md](docs/workbook.md).
+
 ## Planned Features
 
 * Retirement expense planning

@@ -1,13 +1,25 @@
 [project]
 name = "retirement-engine"
-version = "0.1.0"
+dynamic = ["version"]
 description = "Retirement planning engine."
 readme = "README.md"
 requires-python = ">=3.12,<4.0"
-dependencies = []
+dependencies = [
+    "openpyxl>=3.1.0,<4.0.0",
+]
 
 [tool.poetry]
 packages = [{ include = "retirement_engine", from = "src" }]
+version = "0.0.0"
+
+[tool.poetry.requires-plugins]
+poetry-dynamic-versioning = ">=1.10.0,<2.0.0"
+
+[tool.poetry-dynamic-versioning]
+enable = true
+
+[tool.poetry-dynamic-versioning.from-file]
+source = "VERSION"
 
 [tool.poetry.group.dev.dependencies]
 pytest = "^8.4.1"
@@ -15,8 +27,8 @@ ruff = "^0.12.0"
 mypy = "^1.16.1"
 
 [build-system]
-requires = ["poetry-core>=2.0.0,<3.0.0"]
-build-backend = "poetry.core.masonry.api"
+requires = ["poetry-core>=2.0.0,<3.0.0", "poetry-dynamic-versioning>=1.10.0,<2.0.0"]
+build-backend = "poetry_dynamic_versioning.backend"
 
 [tool.ruff]
 line-length = 100

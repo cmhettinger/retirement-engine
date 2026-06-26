@@ -1,16 +1,19 @@
-.PHONY: bootstrap format lint test clean
+.PHONY: bootstrap format lint test template clean
 
 bootstrap:
 	poetry install
 
 format:
-	poetry run ruff format src tests
+	poetry run ruff format src tests tools
 
 lint:
-	poetry run ruff check src tests
+	poetry run ruff check src tests tools
 
 test:
 	poetry run pytest || test $$? -eq 5
+
+template:
+	poetry run python tools/generate_template.py
 
 clean:
 	mkdir -p build

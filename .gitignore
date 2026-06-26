@@ -12,6 +12,7 @@ __pycache__/
 *$py.class
 
 .venv/
+.poetry/
 .env
 .env.*
 

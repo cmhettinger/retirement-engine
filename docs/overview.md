@@ -300,6 +300,20 @@ Business logic is organized into focused modules that separate workbook I/O, fin
 
 ---
 
+# Versioning
+
+The application version lives in the root `VERSION` file and is used for Python
+package metadata and runtime version reporting.
+
+The workbook schema version is separate. It is stored inside the workbook on the
+`Assumptions` sheet as `system.workbook.version`.
+
+`env/config.yml` should reference the supported workbook schema version, not the
+application version. These values may match in early development, but they represent
+different concepts.
+
+---
+
 # Long-Term Goals
 
 Retirement Engine is intended to become a reusable financial modeling platform rather than a single retirement calculator.
