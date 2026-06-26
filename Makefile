@@ -1,4 +1,8 @@
-.PHONY: bootstrap format lint test template clean
+.PHONY: bootstrap format lint test template validate-workbook clean
+
+CONFIG ?= env/config.yml
+VALIDATION_OUTPUT ?= build/workbook-validation.json
+WORKBOOK ?=
 
 bootstrap:
 	poetry install
@@ -14,6 +18,9 @@ test:
 
 template:
 	poetry run python tools/generate_template.py
+
+validate-workbook:
+	poetry run python tools/validate_workbook.py --config $(CONFIG) --output $(VALIDATION_OUTPUT) $(if $(WORKBOOK),--workbook $(WORKBOOK))
 
 clean:
 	mkdir -p build
