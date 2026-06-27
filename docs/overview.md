@@ -314,7 +314,7 @@ package metadata and runtime version reporting.
 The workbook schema version is separate. It is stored inside the workbook on the
 `Assumptions` sheet as `system.workbook.version`.
 
-`env/config.yml` should reference the supported workbook schema version, not the
+`env/config.example.yml` should reference the supported workbook schema version, not the
 application version. These values may match in early development, but they represent
 different concepts.
 

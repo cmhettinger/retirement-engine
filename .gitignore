@@ -1,6 +1,9 @@
 build/*
 !build/.gitkeep
 
+# Local configuration
+env/config.yml
+
 # Local/personal workbooks
 workbooks/*
 !workbooks/.gitkeep

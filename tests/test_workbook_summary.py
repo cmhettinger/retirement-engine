@@ -1,5 +1,6 @@
 from retirement_engine.config import load_config
-from retirement_engine.workbook import load_retirement_workbook, summarize_retirement_workbook
+from retirement_engine.workbook import load_retirement_workbook
+from retirement_engine.workbook.summary import summarize_retirement_workbook
 
 
 def test_summarize_example_workbook() -> None:

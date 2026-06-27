@@ -3,8 +3,10 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from decimal import Decimal
 from pathlib import Path
 
+from retirement_engine.calculators import normalize_budget_rows, total_annual_budget
 from retirement_engine.workbook.reader import RetirementWorkbook, WorkbookCellValue, WorkbookRow
 
 RETIREMENT_ASSET_TAX_TREATMENTS = frozenset({"Pre-tax", "Roth", "HSA", "Taxable"})
@@ -48,6 +50,7 @@ def summarize_retirement_workbook(workbook: RetirementWorkbook) -> WorkbookSumma
     """Build a first-pass summary from workbook rows without mutating the workbook."""
 
     budget_rows = workbook.sheet("Budget").rows
+    normalized_budget_rows = normalize_budget_rows(budget_rows)
     reserve_rows = workbook.sheet("Reserves").rows
     income_rows = workbook.sheet("Income").rows
     asset_rows = workbook.sheet("Assets").rows
@@ -62,9 +65,7 @@ def summarize_retirement_workbook(workbook: RetirementWorkbook) -> WorkbookSumma
     return WorkbookSummary(
         workbook=workbook.path,
         people=_people(workbook),
-        annual_budget_items=sum(
-            1 for row in budget_rows if _has_any_entered_value(row, ("Annual", "Monthly"))
-        ),
+        annual_budget_items=sum(1 for row in normalized_budget_rows if row.has_amount),
         reserve_items=sum(
             1
             for row in reserve_rows
@@ -77,7 +78,7 @@ def summarize_retirement_workbook(workbook: RetirementWorkbook) -> WorkbookSumma
         liabilities=sum(
             1 for row in liability_rows if _has_entered_value(row.values.get("Current Balance"))
         ),
-        annual_expenses=_round_currency(sum(_annual_amount(row) for row in budget_rows)),
+        annual_expenses=_round_currency(total_annual_budget(normalized_budget_rows)),
         annual_replacement_reserve=_round_currency(
             sum(_annual_reserve_amount(row) for row in reserve_rows)
         ),
@@ -133,5 +134,5 @@ def _number(value: WorkbookCellValue) -> float:
     return 0.0
 
 
-def _round_currency(value: float) -> int:
+def _round_currency(value: float | Decimal) -> int:
     return int(round(value))

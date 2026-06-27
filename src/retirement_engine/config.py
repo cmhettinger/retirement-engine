@@ -11,6 +11,7 @@ import yaml
 from retirement_engine.version import __version__
 
 DEFAULT_CONFIG_PATH = Path("env/config.yml")
+EXAMPLE_CONFIG_PATH = Path("env/config.example.yml")
 SUPPORTED_REPORT_FORMATS = frozenset({"console", "html", "pdf", "text"})
 
 
@@ -38,10 +39,15 @@ class AppConfig:
 def load_config(path: str | Path = DEFAULT_CONFIG_PATH) -> AppConfig:
     """Load and validate the application configuration file."""
 
+    project_root = _project_root()
     config_path = Path(path).expanduser()
     if not config_path.is_absolute():
-        config_path = _project_root() / config_path
+        config_path = project_root / config_path
     config_path = config_path.resolve()
+
+    default_config_path = (project_root / DEFAULT_CONFIG_PATH).resolve()
+    if config_path == default_config_path and not config_path.is_file():
+        config_path = (project_root / EXAMPLE_CONFIG_PATH).resolve()
 
     if not config_path.is_file():
         raise ConfigError(f"Configuration file does not exist: {config_path}")
@@ -52,7 +58,7 @@ def load_config(path: str | Path = DEFAULT_CONFIG_PATH) -> AppConfig:
     if not isinstance(raw, dict):
         raise ConfigError("Configuration file must contain a mapping.")
 
-    return _parse_config(raw, source_path=config_path, project_root=_project_root())
+    return _parse_config(raw, source_path=config_path, project_root=project_root)
 
 
 def _parse_config(raw: dict[str, Any], source_path: Path, project_root: Path) -> AppConfig:
@@ -108,6 +114,6 @@ def _required_existing_path(raw: dict[str, Any], key: str, project_root: Path) -
 
 def _project_root() -> Path:
     for parent in Path(__file__).resolve().parents:
-        if (parent / "VERSION").is_file() and (parent / "env" / "config.yml").is_file():
+        if (parent / "VERSION").is_file() and (parent / EXAMPLE_CONFIG_PATH).is_file():
             return parent
     return Path.cwd().resolve()

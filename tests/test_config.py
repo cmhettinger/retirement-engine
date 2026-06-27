@@ -3,7 +3,7 @@ from pathlib import Path
 import pytest
 import yaml
 
-from retirement_engine.config import ConfigError, load_config
+from retirement_engine.config import EXAMPLE_CONFIG_PATH, ConfigError, load_config
 from retirement_engine.version import __version__
 
 
@@ -30,6 +30,16 @@ def test_load_config_uses_runtime_application_version(tmp_path: Path) -> None:
     config = load_config(config_path)
 
     assert config.application_version == __version__ == "0.1.0"
+
+
+def test_load_example_config() -> None:
+    config = load_config(EXAMPLE_CONFIG_PATH)
+
+    assert config.source_path == (config.project_root / EXAMPLE_CONFIG_PATH).resolve()
+    assert (
+        config.default_workbook
+        == (config.project_root / "resources/workbooks/example.xlsx").resolve()
+    )
 
 
 def test_load_config_requires_existing_default_workbook(tmp_path: Path) -> None:

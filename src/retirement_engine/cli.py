@@ -10,12 +10,11 @@ from pathlib import Path
 from retirement_engine.bootstrap import initialize_application
 from retirement_engine.config import DEFAULT_CONFIG_PATH
 from retirement_engine.workbook import (
-    WorkbookSummary,
     WorkbookValidationReport,
     load_retirement_workbook,
-    summarize_retirement_workbook,
     validate_retirement_workbook,
 )
+from retirement_engine.workbook.summary import WorkbookSummary, summarize_retirement_workbook
 
 
 def main(argv: Sequence[str] | None = None) -> int:

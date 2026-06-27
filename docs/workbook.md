@@ -53,10 +53,12 @@ not be committed. Local household workbooks belong under `workbooks/`, which is
 ignored by Git except for `workbooks/.gitkeep`. Other `.xlsx` files are ignored by
 Git unless they are explicitly checked-in resources.
 
-`env/config.yml` points to `resources/workbooks/example.xlsx` by default so
-development and testing have a safe workbook with fictional data.
+`env/config.example.yml` points to `resources/workbooks/example.xlsx` by default so
+development and testing have a safe workbook with fictional data. Copy it to
+`env/config.yml` for local use. The local config file is ignored by Git so personal
+workbook paths do not get committed.
 
 The workbook schema version is stored in the workbook itself as
 `system.workbook.version`. This is separate from the application version in the root
-`VERSION` file. `env/config.yml` should reference the supported workbook schema
-version, not the application version.
+`VERSION` file. Configuration should reference the supported workbook schema version,
+not the application version.
