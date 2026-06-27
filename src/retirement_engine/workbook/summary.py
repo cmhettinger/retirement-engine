@@ -6,7 +6,12 @@ from dataclasses import dataclass
 from decimal import Decimal
 from pathlib import Path
 
-from retirement_engine.calculators import normalize_budget_rows, total_annual_budget
+from retirement_engine.calculators import (
+    normalize_budget_rows,
+    normalize_income_rows,
+    total_annual_budget,
+    total_annual_income,
+)
 from retirement_engine.workbook.reader import RetirementWorkbook, WorkbookCellValue, WorkbookRow
 
 RETIREMENT_ASSET_TAX_TREATMENTS = frozenset({"Pre-tax", "Roth", "HSA", "Taxable"})
@@ -53,6 +58,7 @@ def summarize_retirement_workbook(workbook: RetirementWorkbook) -> WorkbookSumma
     normalized_budget_rows = normalize_budget_rows(budget_rows)
     reserve_rows = workbook.sheet("Reserves").rows
     income_rows = workbook.sheet("Income").rows
+    normalized_income_rows = normalize_income_rows(income_rows)
     asset_rows = workbook.sheet("Assets").rows
     liability_rows = workbook.sheet("Liabilities").rows
     retirement_asset_rows = tuple(
@@ -71,9 +77,7 @@ def summarize_retirement_workbook(workbook: RetirementWorkbook) -> WorkbookSumma
             for row in reserve_rows
             if _has_entered_value(row.values.get("Estimated Replacement Cost"))
         ),
-        income_sources=sum(
-            1 for row in income_rows if _has_any_entered_value(row, ("Annual", "Monthly"))
-        ),
+        income_sources=sum(1 for row in normalized_income_rows if row.has_amount),
         assets=len(retirement_asset_rows),
         liabilities=sum(
             1 for row in liability_rows if _has_entered_value(row.values.get("Current Balance"))
@@ -82,9 +86,7 @@ def summarize_retirement_workbook(workbook: RetirementWorkbook) -> WorkbookSumma
         annual_replacement_reserve=_round_currency(
             sum(_annual_reserve_amount(row) for row in reserve_rows)
         ),
-        estimated_retirement_income=_round_currency(
-            sum(_annual_amount(row) for row in income_rows)
-        ),
+        estimated_retirement_income=_round_currency(total_annual_income(normalized_income_rows)),
         current_retirement_assets=_round_currency(
             sum(_number(row.values.get("Current Balance")) for row in retirement_asset_rows)
         ),
