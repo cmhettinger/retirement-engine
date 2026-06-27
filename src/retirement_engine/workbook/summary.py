@@ -7,12 +7,14 @@ from decimal import Decimal
 from pathlib import Path
 
 from retirement_engine.calculators import (
+    calculate_reserve_rows,
     normalize_budget_rows,
     normalize_income_rows,
+    rollup_reserves,
     total_annual_budget,
     total_annual_income,
 )
-from retirement_engine.workbook.reader import RetirementWorkbook, WorkbookCellValue, WorkbookRow
+from retirement_engine.workbook.reader import RetirementWorkbook, WorkbookCellValue
 
 RETIREMENT_ASSET_TAX_TREATMENTS = frozenset({"Pre-tax", "Roth", "HSA", "Taxable"})
 
@@ -57,6 +59,8 @@ def summarize_retirement_workbook(workbook: RetirementWorkbook) -> WorkbookSumma
     budget_rows = workbook.sheet("Budget").rows
     normalized_budget_rows = normalize_budget_rows(budget_rows)
     reserve_rows = workbook.sheet("Reserves").rows
+    calculated_reserve_rows = calculate_reserve_rows(reserve_rows)
+    reserve_rollup = rollup_reserves(calculated_reserve_rows)
     income_rows = workbook.sheet("Income").rows
     normalized_income_rows = normalize_income_rows(income_rows)
     asset_rows = workbook.sheet("Assets").rows
@@ -72,20 +76,14 @@ def summarize_retirement_workbook(workbook: RetirementWorkbook) -> WorkbookSumma
         workbook=workbook.path,
         people=_people(workbook),
         annual_budget_items=sum(1 for row in normalized_budget_rows if row.has_amount),
-        reserve_items=sum(
-            1
-            for row in reserve_rows
-            if _has_entered_value(row.values.get("Estimated Replacement Cost"))
-        ),
+        reserve_items=reserve_rollup.item_count,
         income_sources=sum(1 for row in normalized_income_rows if row.has_amount),
         assets=len(retirement_asset_rows),
         liabilities=sum(
             1 for row in liability_rows if _has_entered_value(row.values.get("Current Balance"))
         ),
         annual_expenses=_round_currency(total_annual_budget(normalized_budget_rows)),
-        annual_replacement_reserve=_round_currency(
-            sum(_annual_reserve_amount(row) for row in reserve_rows)
-        ),
+        annual_replacement_reserve=_round_currency(reserve_rollup.annual_contribution),
         estimated_retirement_income=_round_currency(total_annual_income(normalized_income_rows)),
         current_retirement_assets=_round_currency(
             sum(_number(row.values.get("Current Balance")) for row in retirement_asset_rows)
@@ -104,22 +102,6 @@ def _people(workbook: RetirementWorkbook) -> tuple[str, ...]:
         if isinstance(value, str) and value.strip():
             names.append(value.strip())
     return tuple(names)
-
-
-def _annual_amount(row: WorkbookRow) -> float:
-    return _number(row.values.get("Annual")) + (_number(row.values.get("Monthly")) * 12)
-
-
-def _annual_reserve_amount(row: WorkbookRow) -> float:
-    replacement_cost = _number(row.values.get("Estimated Replacement Cost"))
-    remaining_life = _number(row.values.get("Remaining Useful Life"))
-    if replacement_cost <= 0 or remaining_life <= 0:
-        return 0.0
-    return replacement_cost / remaining_life
-
-
-def _has_any_entered_value(row: WorkbookRow, columns: tuple[str, ...]) -> bool:
-    return any(_has_entered_value(row.values.get(column)) for column in columns)
 
 
 def _has_entered_value(value: WorkbookCellValue) -> bool:
