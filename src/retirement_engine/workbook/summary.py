@@ -8,15 +8,16 @@ from pathlib import Path
 
 from retirement_engine.calculators import (
     calculate_reserve_rows,
+    normalize_asset_rows,
     normalize_budget_rows,
     normalize_income_rows,
+    rollup_assets,
     rollup_reserves,
     total_annual_budget,
     total_annual_income,
+    total_retirement_assets,
 )
 from retirement_engine.workbook.reader import RetirementWorkbook, WorkbookCellValue
-
-RETIREMENT_ASSET_TAX_TREATMENTS = frozenset({"Pre-tax", "Roth", "HSA", "Taxable"})
 
 
 @dataclass(frozen=True)
@@ -64,13 +65,9 @@ def summarize_retirement_workbook(workbook: RetirementWorkbook) -> WorkbookSumma
     income_rows = workbook.sheet("Income").rows
     normalized_income_rows = normalize_income_rows(income_rows)
     asset_rows = workbook.sheet("Assets").rows
+    normalized_asset_rows = normalize_asset_rows(asset_rows)
+    asset_rollup = rollup_assets(normalized_asset_rows)
     liability_rows = workbook.sheet("Liabilities").rows
-    retirement_asset_rows = tuple(
-        row
-        for row in asset_rows
-        if row.values.get("Tax Treatment") in RETIREMENT_ASSET_TAX_TREATMENTS
-        and _has_entered_value(row.values.get("Current Balance"))
-    )
 
     return WorkbookSummary(
         workbook=workbook.path,
@@ -78,16 +75,14 @@ def summarize_retirement_workbook(workbook: RetirementWorkbook) -> WorkbookSumma
         annual_budget_items=sum(1 for row in normalized_budget_rows if row.has_amount),
         reserve_items=reserve_rollup.item_count,
         income_sources=sum(1 for row in normalized_income_rows if row.has_amount),
-        assets=len(retirement_asset_rows),
+        assets=asset_rollup.retirement_item_count,
         liabilities=sum(
             1 for row in liability_rows if _has_entered_value(row.values.get("Current Balance"))
         ),
         annual_expenses=_round_currency(total_annual_budget(normalized_budget_rows)),
         annual_replacement_reserve=_round_currency(reserve_rollup.annual_contribution),
         estimated_retirement_income=_round_currency(total_annual_income(normalized_income_rows)),
-        current_retirement_assets=_round_currency(
-            sum(_number(row.values.get("Current Balance")) for row in retirement_asset_rows)
-        ),
+        current_retirement_assets=_round_currency(total_retirement_assets(normalized_asset_rows)),
     )
 
 
@@ -106,16 +101,6 @@ def _people(workbook: RetirementWorkbook) -> tuple[str, ...]:
 
 def _has_entered_value(value: WorkbookCellValue) -> bool:
     return value is not None and (not isinstance(value, str) or bool(value.strip()))
-
-
-def _number(value: WorkbookCellValue) -> float:
-    if isinstance(value, bool) or value is None:
-        return 0.0
-    if isinstance(value, int | float):
-        return float(value)
-    if isinstance(value, str) and value.strip():
-        return float(value)
-    return 0.0
 
 
 def _round_currency(value: float | Decimal) -> int:
