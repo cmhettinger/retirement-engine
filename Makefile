@@ -1,9 +1,10 @@
-.PHONY: bootstrap format lint test template validate-workbook summarize-workbook clean
+.PHONY: bootstrap format lint test template validate-workbook summarize-workbook report-workbook clean
 
 CONFIG ?= env/config.yml
 VALIDATION_OUTPUT ?= build/workbook-validation.json
 SUMMARY_FORMAT ?= text
 SUMMARY_OUTPUT ?=
+REPORT_OUTPUT ?=
 WORKBOOK ?=
 
 bootstrap:
@@ -26,6 +27,9 @@ validate-workbook:
 
 summarize-workbook:
 	poetry run python -m retirement_engine --config $(CONFIG) summary --format $(SUMMARY_FORMAT) $(if $(SUMMARY_OUTPUT),--output $(SUMMARY_OUTPUT)) $(WORKBOOK)
+
+report-workbook:
+	poetry run python -m retirement_engine --config $(CONFIG) report $(if $(REPORT_OUTPUT),--output $(REPORT_OUTPUT)) $(WORKBOOK)
 
 clean:
 	mkdir -p build

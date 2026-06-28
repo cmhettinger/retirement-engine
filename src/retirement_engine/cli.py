@@ -9,6 +9,7 @@ from pathlib import Path
 
 from retirement_engine.bootstrap import initialize_application
 from retirement_engine.config import DEFAULT_CONFIG_PATH
+from retirement_engine.reports import render_console_summary_report
 from retirement_engine.workbook import (
     WorkbookValidationReport,
     load_retirement_workbook,
@@ -40,6 +41,11 @@ def main(argv: Sequence[str] | None = None) -> int:
         _emit_output(_format_summary(summary, args.output_format), args.output)
         return 0
 
+    if args.command == "report":
+        workbook = load_retirement_workbook(workbook_path)
+        _emit_output(render_console_summary_report(workbook), args.output)
+        return 0
+
     raise ValueError(f"Unsupported command: {args.command}")
 
 
@@ -60,6 +66,10 @@ def _build_parser() -> argparse.ArgumentParser:
     )
     _add_workbook_argument(summary_parser)
     _add_output_arguments(summary_parser)
+
+    report_parser = subparsers.add_parser("report", help="Print a console summary report.")
+    _add_workbook_argument(report_parser)
+    report_parser.add_argument("--output", help="Write output to a file instead of stdout.")
 
     return parser
 

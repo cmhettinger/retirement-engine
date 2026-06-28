@@ -60,3 +60,25 @@ def test_cli_summary_writes_json(tmp_path: Path) -> None:
     assert report["people"] == ["Han Solo", "Leia Organa"]
     assert report["counts"]["assets"] == 9
     assert report["totals"]["current_retirement_assets"] == 1706000
+
+
+def test_cli_report_prints_text(capsys: pytest.CaptureFixture[str]) -> None:
+    exit_code = main(["report"])
+
+    assert exit_code == 0
+    output = capsys.readouterr().out
+    assert "Retirement Summary Report" in output
+    assert "Annual spending need:        $238,931" in output
+    assert "Status:                      on track" in output
+    assert "Next Steps\n----------" in output
+
+
+def test_cli_report_writes_text(tmp_path: Path) -> None:
+    output_path = tmp_path / "console-report.txt"
+
+    exit_code = main(["report", "--output", str(output_path)])
+
+    assert exit_code == 0
+    report = output_path.read_text(encoding="utf-8")
+    assert "Retirement Summary Report" in report
+    assert "Earliest viable year:        2026" in report
