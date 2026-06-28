@@ -80,6 +80,7 @@ def project_retirement_years(
     workbook: RetirementWorkbook,
     *,
     start_year: int | None = None,
+    retirement_years_from_start: int | None = None,
 ) -> AnnualProjection:
     """Project annual portfolio balances through the configured planning horizon."""
 
@@ -90,7 +91,11 @@ def project_retirement_years(
     projection_start_year = start_year if start_year is not None else date.today().year
     person1_current_age = int(_assumption_decimal(assumptions, "assumptions.person1.current_age"))
     person2_current_age = int(_assumption_decimal(assumptions, "assumptions.person2.current_age"))
-    years_until_retirement = _years_until_retirement(assumptions)
+    years_until_retirement = (
+        _years_until_retirement(assumptions)
+        if retirement_years_from_start is None
+        else retirement_years_from_start
+    )
     planning_horizon_years = int(
         _assumption_decimal(assumptions, "assumptions.household.planning_horizon_years")
     )
