@@ -9,7 +9,7 @@ from pathlib import Path
 
 from retirement_engine.bootstrap import initialize_application
 from retirement_engine.config import DEFAULT_CONFIG_PATH
-from retirement_engine.reports import render_console_summary_report
+from retirement_engine.reports import render_console_summary_report, render_retirement_summary_pdf
 from retirement_engine.workbook import (
     WorkbookValidationReport,
     load_retirement_workbook,
@@ -43,6 +43,14 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     if args.command == "report":
         workbook = load_retirement_workbook(workbook_path)
+        if args.report_format == "pdf":
+            result = render_retirement_summary_pdf(
+                workbook,
+                output_dir=context.config.output_directory,
+                output_path=args.output,
+            )
+            print(result.primary_artifact.resolved_path())
+            return 0
         _emit_output(render_console_summary_report(workbook), args.output)
         return 0
 
@@ -69,6 +77,13 @@ def _build_parser() -> argparse.ArgumentParser:
 
     report_parser = subparsers.add_parser("report", help="Print a console summary report.")
     _add_workbook_argument(report_parser)
+    report_parser.add_argument(
+        "--format",
+        choices=("text", "pdf"),
+        default="text",
+        dest="report_format",
+        help="Report output format.",
+    )
     report_parser.add_argument("--output", help="Write output to a file instead of stdout.")
 
     return parser

@@ -82,3 +82,13 @@ def test_cli_report_writes_text(tmp_path: Path) -> None:
     report = output_path.read_text(encoding="utf-8")
     assert "Retirement Summary Report" in report
     assert "Earliest viable year:        2026" in report
+
+
+def test_cli_report_writes_pdf(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    output_path = tmp_path / "retirement-summary.pdf"
+
+    exit_code = main(["report", "--format", "pdf", "--output", str(output_path)])
+
+    assert exit_code == 0
+    assert output_path.read_bytes().startswith(b"%PDF")
+    assert str(output_path) in capsys.readouterr().out
