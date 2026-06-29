@@ -29,3 +29,5 @@ htmlcov/
 
 dist/
 *.egg-info/
+
+tmp/
