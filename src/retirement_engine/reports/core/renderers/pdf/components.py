@@ -7,7 +7,8 @@ from typing import Any
 from reportlab.lib.units import inch
 from reportlab.lib.utils import ImageReader
 from reportlab.pdfbase.pdfmetrics import stringWidth
-from reportlab.platypus import Flowable, Image, Paragraph, Spacer
+from reportlab.platypus import Flowable, Image, PageBreak, Paragraph, Spacer
+from reportlab.platypus.tableofcontents import TableOfContents
 
 from retirement_engine.reports.core.branding import BrandingConfig, ReportTheme
 from retirement_engine.reports.core.renderers.pdf.styles import ReportStyles
@@ -19,6 +20,51 @@ def paragraph(text: str, *, styles: ReportStyles) -> Paragraph:
 
 def section_heading(text: str, *, styles: ReportStyles) -> Paragraph:
     return Paragraph(text, styles.heading)
+
+
+def navigable_heading(
+    text: str,
+    *,
+    styles: ReportStyles,
+    level: int = 0,
+    bookmark: str | None = None,
+) -> Paragraph:
+    style = styles.heading if level == 0 else styles.subheading
+    heading = Paragraph(text, style)
+    heading._retirement_engine_toc_entry = (level, text, bookmark)
+    return heading
+
+
+def table_of_contents(*, styles: ReportStyles, title: str = "Table of Contents") -> list[Flowable]:
+    toc = TableOfContents()
+    toc.levelStyles = [
+        styles.body,
+        styles.small,
+    ]
+    return [
+        section_heading(title, styles=styles),
+        spacer(8),
+        toc,
+    ]
+
+
+def section_divider(
+    title: str,
+    *,
+    styles: ReportStyles,
+    subtitle: str | None = None,
+    bookmark: str | None = None,
+    level: int = 0,
+) -> list[Flowable]:
+    flowables: list[Flowable] = [
+        PageBreak(),
+        Spacer(1, 2.2 * inch),
+        navigable_heading(title, styles=styles, level=level, bookmark=bookmark),
+    ]
+    if subtitle:
+        flowables.append(Paragraph(subtitle, styles.subtitle))
+    flowables.append(PageBreak())
+    return flowables
 
 
 def spacer(height: float = 12.0) -> Spacer:
@@ -48,6 +94,7 @@ class ProfessionalLetterTitlePage(Flowable):  # type: ignore[misc]
         theme: ReportTheme | None = None,
         logo_path: Path | None = None,
         watermark_path: Path | None = None,
+        prepared_for_name: str | None = None,
     ) -> None:
         super().__init__()
         self.title = title
@@ -70,6 +117,7 @@ class ProfessionalLetterTitlePage(Flowable):  # type: ignore[misc]
             lockup="icon",
             size="512h",
         )
+        self.prepared_for_name = prepared_for_name
 
     def wrap(self, available_width: float, available_height: float) -> tuple[float, float]:
         return available_width, available_height
@@ -118,9 +166,10 @@ class ProfessionalLetterTitlePage(Flowable):  # type: ignore[misc]
         bottom_rule_y = rule_offset
         bottom_label_y = bottom_rule_y - 12.0 - label_gap
 
-        watermark_width = 4.75 * inch
+        watermark_width = 3.2 * inch
         watermark_x = page_width - side_margin - watermark_width
         watermark_y = bottom_rule_y + 0.15 * inch
+        watermark_height = watermark_width
         logo_width = 2.585 * inch
         logo_height = 0.803 * inch
         logo_x = (page_width - logo_width) / 2.0
@@ -237,6 +286,25 @@ class ProfessionalLetterTitlePage(Flowable):  # type: ignore[misc]
                     self.report_date.strftime("%b %d").upper(),
                 )
 
+        if self.prepared_for_name:
+            prepared_for_x = title_x + 0.04 * inch
+            prepared_for_label_y = watermark_y + watermark_height - 2.0
+            prepared_for_name_y = prepared_for_label_y - 19.0
+            prepared_for_max_width = divider_x - prepared_for_x - 0.35 * inch
+            prepared_for_name_size = _fit_font_size(
+                self.prepared_for_name,
+                theme.body_bold_font,
+                16.0,
+                prepared_for_max_width,
+                minimum=11.0,
+            )
+            canvas.setFillColor(theme.dark_grey)
+            canvas.setFont(theme.body_semibold_font, 9)
+            canvas.drawString(prepared_for_x, prepared_for_label_y, "Prepared for:")
+            canvas.setFillColor(theme.primary)
+            canvas.setFont(theme.body_bold_font, prepared_for_name_size)
+            canvas.drawString(prepared_for_x, prepared_for_name_y, self.prepared_for_name)
+
         canvas.restoreState()
 
 
@@ -254,6 +322,7 @@ def professional_letter_title_page(
     theme: ReportTheme | None = None,
     logo_path: Path | None = None,
     watermark_path: Path | None = None,
+    prepared_for_name: str | None = None,
 ) -> list[Flowable]:
     return [
         ProfessionalLetterTitlePage(
@@ -269,6 +338,7 @@ def professional_letter_title_page(
             theme=theme,
             logo_path=logo_path,
             watermark_path=watermark_path,
+            prepared_for_name=prepared_for_name,
         )
     ]
 

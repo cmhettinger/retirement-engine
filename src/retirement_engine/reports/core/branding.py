@@ -9,8 +9,8 @@ from reportlab.lib.colors import HexColor
 from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfbase.ttfonts import TTFont
 
-RETIREMENT_ENGINE_PRIMARY_RED: Final[str] = "#8B0000"
-RETIREMENT_ENGINE_ACCENT_RED: Final[str] = "#C1121F"
+RETIREMENT_ENGINE_PRIMARY_GREEN: Final[str] = "#1F5D3A"
+RETIREMENT_ENGINE_ACCENT_GREEN: Final[str] = "#3F8F64"
 RETIREMENT_ENGINE_LIGHT_GREY: Final[str] = "#C9C9C9"
 RETIREMENT_ENGINE_DARK_GREY: Final[str] = "#2B2B2B"
 WHITE: Final[str] = "#FFFFFF"
@@ -52,7 +52,7 @@ class BrandingConfig:
     def logo_path(
         self,
         *,
-        color: str = "red",
+        color: str = "green",
         lockup: str = "horizontal",
         size: str = "256h",
         extension: str = "png",
@@ -64,8 +64,8 @@ class BrandingConfig:
 
 @dataclass(frozen=True, slots=True)
 class ReportTheme:
-    primary: object = HexColor(RETIREMENT_ENGINE_PRIMARY_RED)
-    accent: object = HexColor(RETIREMENT_ENGINE_ACCENT_RED)
+    primary: object = HexColor(RETIREMENT_ENGINE_PRIMARY_GREEN)
+    accent: object = HexColor(RETIREMENT_ENGINE_ACCENT_GREEN)
     light_grey: object = HexColor(RETIREMENT_ENGINE_LIGHT_GREY)
     dark_grey: object = HexColor(RETIREMENT_ENGINE_DARK_GREY)
     white: object = HexColor(WHITE)

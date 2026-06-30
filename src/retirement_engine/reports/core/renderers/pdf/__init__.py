@@ -3,10 +3,13 @@
 from retirement_engine.reports.core.renderers.pdf.components import (
     ProfessionalLetterTitlePage,
     cover_page,
+    navigable_heading,
     paragraph,
     professional_letter_title_page,
+    section_divider,
     section_heading,
     spacer,
+    table_of_contents,
 )
 from retirement_engine.reports.core.renderers.pdf.document import (
     DocumentSpec,
@@ -42,8 +45,11 @@ __all__ = [
     "inches",
     "make_doc",
     "make_page_template",
+    "navigable_heading",
     "paragraph",
     "professional_letter_title_page",
+    "section_divider",
     "section_heading",
     "spacer",
+    "table_of_contents",
 ]

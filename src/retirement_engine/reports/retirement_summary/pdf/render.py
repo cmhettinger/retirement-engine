@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import date, datetime
+from datetime import datetime
 from decimal import ROUND_HALF_UP, Decimal
 from pathlib import Path
 from typing import Any
@@ -21,14 +21,17 @@ from retirement_engine.reports.core.contracts import RenderContext, RenderResult
 from retirement_engine.reports.core.renderers.pdf import (
     HeaderFooterSpec,
     PdfRenderer,
+    navigable_heading,
     paragraph,
     professional_letter_title_page,
-    section_heading,
+    section_divider,
     spacer,
+    table_of_contents,
 )
 from retirement_engine.reports.core.renderers.pdf.tables import simple_table
+from retirement_engine.version import __version__
 from retirement_engine.workbook.reader import RetirementWorkbook
-from retirement_engine.workbook.summary import summarize_retirement_workbook
+from retirement_engine.workbook.summary import WorkbookSummary, summarize_retirement_workbook
 
 REPORT_ID = "retirement.summary"
 TITLE = "Retirement Summary"
@@ -59,6 +62,7 @@ def render_retirement_summary_pdf(
         metadata=metadata,
         context=RenderContext(output_dir=Path(output_dir)),
     )
+    workbook_summary = summarize_retirement_workbook(workbook)
     story: list[Any] = [
         *professional_letter_title_page(
             title=metadata.title,
@@ -69,24 +73,37 @@ def render_retirement_summary_pdf(
             classification_text=FOOTER_TEXT,
             branding=renderer.branding,
             theme=renderer.theme,
+            prepared_for_name=_household_name(workbook_summary.people),
         ),
         PageBreak(),
-        *_body_story(workbook, renderer=renderer, generated_date=generated_at.date()),
+        *table_of_contents(styles=renderer.styles),
+        *_body_story(
+            workbook,
+            workbook_summary=workbook_summary,
+            renderer=renderer,
+            generated_at=generated_at,
+        ),
     ]
     return renderer.render(
         story,
         out_path=Path(output_path) if output_path is not None else None,
-        header_footer=HeaderFooterSpec(header_center_text=HEADER_TEXT, footer_text=FOOTER_TEXT),
+        header_footer=HeaderFooterSpec(
+            header_text=TITLE,
+            header_center_text=HEADER_TEXT,
+            header_right_text=generated_at.date().isoformat(),
+            footer_text=FOOTER_TEXT,
+            page_number_offset=1,
+        ),
     )
 
 
 def _body_story(
     workbook: RetirementWorkbook,
     *,
+    workbook_summary: WorkbookSummary,
     renderer: PdfRenderer,
-    generated_date: date,
+    generated_at: datetime,
 ) -> list[Any]:
-    workbook_summary = summarize_retirement_workbook(workbook)
     expense_summary = summarize_household_expenses(workbook)
     readiness = estimate_retirement_readiness(workbook)
     retirement_dates = estimate_retirement_dates(workbook)
@@ -95,25 +112,62 @@ def _body_story(
     styles = renderer.styles
 
     return [
-        section_heading("Executive Summary", styles=styles),
+        *section_divider(
+            "Executive Summary",
+            styles=styles,
+            subtitle="Current readiness, balance-sheet snapshot, and near-term planning notes.",
+            bookmark="executive-summary",
+        ),
         paragraph(_executive_summary(expense_summary, readiness), styles=styles),
         spacer(6),
         _snapshot_table(expense_summary, readiness, retirement_dates, renderer=renderer),
         spacer(12),
-        section_heading("Household", styles=styles),
-        _household_table(workbook_summary.people, generated_date, renderer=renderer),
+        navigable_heading("Household", styles=styles, level=1, bookmark="household"),
+        _household_table(
+            workbook_summary.people,
+            generated_at,
+            workbook_version=_workbook_version(workbook),
+            engine_version=__version__,
+            renderer=renderer,
+        ),
         spacer(12),
-        section_heading("Balance Sheet", styles=styles),
+        navigable_heading("Balance Sheet", styles=styles, level=1, bookmark="balance-sheet"),
         _balance_sheet_table(expense_summary, renderer=renderer),
         spacer(12),
-        section_heading("Insurance", styles=styles),
+        navigable_heading("Insurance", styles=styles, level=1, bookmark="insurance"),
         _insurance_table(expense_summary, renderer=renderer),
-        PageBreak(),
-        section_heading("Warnings", styles=styles),
+        *section_divider(
+            "Planning Notes",
+            styles=styles,
+            subtitle=(
+                "Warnings and immediate follow-up items from the current "
+                "deterministic summary."
+            ),
+            bookmark="planning-notes",
+        ),
+        navigable_heading("Warnings", styles=styles, level=1, bookmark="warnings"),
         *_bullets(warnings, renderer=renderer),
         spacer(12),
-        section_heading("Next Steps", styles=styles),
+        navigable_heading("Next Steps", styles=styles, level=1, bookmark="next-steps"),
         *_bullets(next_steps, renderer=renderer),
+        *section_divider(
+            "Appendices",
+            styles=styles,
+            subtitle="Reference material and report metadata for validation and troubleshooting.",
+            bookmark="appendices",
+        ),
+        navigable_heading(
+            "Appendix A - Report Metadata",
+            styles=styles,
+            level=1,
+            bookmark="appendix-a",
+        ),
+        _report_metadata_table(
+            workbook=workbook,
+            household=workbook_summary.people,
+            generated_at=generated_at,
+            renderer=renderer,
+        ),
     ]
 
 
@@ -157,15 +211,42 @@ def _snapshot_table(
 
 def _household_table(
     people: tuple[str, ...],
-    generated_date: date,
+    generated_at: datetime,
     *,
+    workbook_version: str,
+    engine_version: str,
     renderer: PdfRenderer,
 ) -> Table:
     return simple_table(
         [
             ["Field", "Value"],
-            ["People", ", ".join(people)],
-            ["Generated date", generated_date.isoformat()],
+            ["People", _household_name(people)],
+            ["Workbook version", workbook_version],
+            ["Engine version", engine_version],
+            ["Generated date", generated_at.date().isoformat()],
+            ["Generated time", generated_at.isoformat(timespec="seconds")],
+        ],
+        theme=renderer.theme,
+    )
+
+
+def _report_metadata_table(
+    *,
+    workbook: RetirementWorkbook,
+    household: tuple[str, ...],
+    generated_at: datetime,
+    renderer: PdfRenderer,
+) -> Table:
+    return simple_table(
+        [
+            ["Field", "Value"],
+            ["Report ID", REPORT_ID],
+            ["Report title", TITLE],
+            ["Household", _household_name(household)],
+            ["Workbook path", str(workbook.path)],
+            ["Workbook version", _workbook_version(workbook)],
+            ["Engine version", __version__],
+            ["Generated at", generated_at.isoformat(timespec="seconds")],
         ],
         theme=renderer.theme,
     )
@@ -220,4 +301,23 @@ def _percent(value: Decimal | None) -> str:
 def _optional_year(value: int | None) -> str:
     if value is None:
         return "n/a"
+    return str(value)
+
+
+def _household_name(people: tuple[str, ...]) -> str:
+    if not people:
+        return "Household"
+    return " and ".join(people)
+
+
+def _workbook_version(workbook: RetirementWorkbook) -> str:
+    assumptions = workbook.sheets.get("Assumptions")
+    if assumptions is None:
+        return "unknown"
+    version_row = assumptions.rows_by_id.get("system.workbook.version")
+    if version_row is None:
+        return "unknown"
+    value = version_row.values.get("Value")
+    if value is None:
+        return "unknown"
     return str(value)
