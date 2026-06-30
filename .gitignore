@@ -3,6 +3,7 @@ build/*
 
 # Local configuration
 env/config.yml
+.vscode/
 
 # Local/personal workbooks
 workbooks/*
