@@ -1,12 +1,76 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from decimal import Decimal
 from pathlib import Path
+from typing import Any
 
+from reportlab.graphics.charts.barcharts import VerticalBarChart
+from reportlab.graphics.charts.legends import Legend
+from reportlab.graphics.charts.linecharts import HorizontalLineChart
+from reportlab.graphics.charts.piecharts import Pie
+from reportlab.graphics.shapes import Drawing, Line, String
+from reportlab.lib import colors
 from reportlab.lib.utils import ImageReader
 from reportlab.platypus import Flowable, Paragraph
 
+from retirement_engine.reports.core.branding import ReportTheme
 from retirement_engine.reports.core.renderers.pdf.styles import ReportStyles
+
+Number = int | float | Decimal
+
+
+@dataclass(frozen=True, slots=True)
+class ChartPoint:
+    label: str
+    value: Number
+
+
+@dataclass(frozen=True, slots=True)
+class ChartSeries:
+    label: str
+    points: tuple[ChartPoint, ...]
+
+
+@dataclass(frozen=True, slots=True)
+class ChartDimensions:
+    width: float = 432.0
+    height: float = 252.0
+    left_padding: float = 54.0
+    right_padding: float = 22.0
+    top_padding: float = 34.0
+    bottom_padding: float = 44.0
+
+    @property
+    def plot_width(self) -> float:
+        return self.width - self.left_padding - self.right_padding
+
+    @property
+    def plot_height(self) -> float:
+        return self.height - self.top_padding - self.bottom_padding
+
+
+@dataclass(frozen=True, slots=True)
+class BarChartSpec:
+    title: str
+    series: tuple[ChartSeries, ...]
+    dimensions: ChartDimensions = ChartDimensions()
+    value_axis_label: str | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class LineChartSpec:
+    title: str
+    series: tuple[ChartSeries, ...]
+    dimensions: ChartDimensions = ChartDimensions()
+    value_axis_label: str | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class PieChartSpec:
+    title: str
+    points: tuple[ChartPoint, ...]
+    dimensions: ChartDimensions = ChartDimensions()
 
 
 @dataclass(frozen=True, slots=True)
@@ -69,3 +133,203 @@ class ChartBlock(Flowable):  # type: ignore[misc]
         )
         if self._caption:
             self._caption.drawOn(self.canv, 0, 0)
+
+
+def bar_chart(spec: BarChartSpec, *, theme: ReportTheme) -> Drawing:
+    _require_series(spec.series)
+    categories = _categories(spec.series)
+    drawing = _base_drawing(spec.title, dimensions=spec.dimensions, theme=theme)
+    chart = VerticalBarChart()
+    _position_chart(chart, dimensions=spec.dimensions)
+    chart.data = [_series_values(series) for series in spec.series]
+    chart.categoryAxis.categoryNames = categories
+    chart.categoryAxis.labels.boxAnchor = "ne"
+    chart.categoryAxis.labels.angle = 30
+    chart.valueAxis.valueMin = 0
+    chart.valueAxis.visibleGrid = True
+    chart.barSpacing = 2
+    chart.groupSpacing = 10
+    _apply_series_colors(chart.bars, count=len(spec.series), theme=theme)
+    drawing.add(chart)
+    _add_axis_label(drawing, spec.value_axis_label, dimensions=spec.dimensions, theme=theme)
+    _add_legend(drawing, [series.label for series in spec.series], spec.dimensions, theme=theme)
+    return drawing
+
+
+def line_chart(spec: LineChartSpec, *, theme: ReportTheme) -> Drawing:
+    _require_series(spec.series)
+    categories = _categories(spec.series)
+    drawing = _base_drawing(spec.title, dimensions=spec.dimensions, theme=theme)
+    chart = HorizontalLineChart()
+    _position_chart(chart, dimensions=spec.dimensions)
+    chart.data = [_series_values(series) for series in spec.series]
+    chart.categoryAxis.categoryNames = categories
+    chart.categoryAxis.labels.boxAnchor = "ne"
+    chart.categoryAxis.labels.angle = 30
+    chart.valueAxis.valueMin = 0
+    chart.valueAxis.visibleGrid = True
+    chart.joinedLines = True
+    _apply_series_colors(chart.lines, count=len(spec.series), theme=theme)
+    drawing.add(chart)
+    _add_axis_label(drawing, spec.value_axis_label, dimensions=spec.dimensions, theme=theme)
+    _add_legend(drawing, [series.label for series in spec.series], spec.dimensions, theme=theme)
+    return drawing
+
+
+def pie_chart(spec: PieChartSpec, *, theme: ReportTheme) -> Drawing:
+    if not spec.points:
+        raise ValueError("Pie chart requires at least one point.")
+
+    dimensions = spec.dimensions
+    drawing = _base_drawing(spec.title, dimensions=dimensions, theme=theme)
+    pie = Pie()
+    pie.width = min(dimensions.plot_width * 0.56, dimensions.plot_height)
+    pie.height = pie.width
+    pie.x = dimensions.left_padding
+    pie.y = dimensions.bottom_padding
+    pie.data = [_number(point.value) for point in spec.points]
+    pie.labels = [point.label for point in spec.points]
+    pie.sideLabels = True
+    for index, color in enumerate(_palette(theme, len(spec.points))):
+        pie.slices[index].fillColor = color
+    drawing.add(pie)
+    _add_legend(drawing, [point.label for point in spec.points], dimensions, theme=theme)
+    return drawing
+
+
+def _base_drawing(title: str, *, dimensions: ChartDimensions, theme: ReportTheme) -> Drawing:
+    drawing = Drawing(dimensions.width, dimensions.height)
+    drawing.add(
+        String(
+            dimensions.left_padding,
+            dimensions.height - 16,
+            title,
+            fontName=theme.body_semibold_font,
+            fontSize=11,
+            fillColor=theme.dark_grey,
+        )
+    )
+    drawing.add(
+        Line(
+            dimensions.left_padding,
+            dimensions.height - 24,
+            dimensions.width - dimensions.right_padding,
+            dimensions.height - 24,
+            strokeColor=theme.light_grey,
+            strokeWidth=0.5,
+        )
+    )
+    return drawing
+
+
+def _position_chart(chart: Any, *, dimensions: ChartDimensions) -> None:
+    positioned_chart = chart
+    positioned_chart.x = dimensions.left_padding
+    positioned_chart.y = dimensions.bottom_padding
+    positioned_chart.width = dimensions.plot_width
+    positioned_chart.height = dimensions.plot_height
+
+
+def _add_axis_label(
+    drawing: Drawing,
+    label: str | None,
+    *,
+    dimensions: ChartDimensions,
+    theme: ReportTheme,
+) -> None:
+    if not label:
+        return
+    drawing.add(
+        String(
+            dimensions.left_padding,
+            dimensions.height - 29,
+            label,
+            fontName=theme.body_font,
+            fontSize=8,
+            fillColor=theme.dark_grey,
+        )
+    )
+
+
+def _add_legend(
+    drawing: Drawing,
+    labels: list[str],
+    dimensions: ChartDimensions,
+    *,
+    theme: ReportTheme,
+) -> None:
+    if len(labels) <= 1:
+        return
+    legend = Legend()
+    legend.x = dimensions.left_padding
+    legend.y = 8
+    legend.fontName = theme.body_font
+    legend.fontSize = 7
+    legend.boxAnchor = "sw"
+    legend.columnMaximum = 2
+    legend.dx = 7
+    legend.dy = 7
+    legend.deltax = 80
+    legend.deltay = 10
+    legend.colorNamePairs = list(
+        zip(_palette(theme, len(labels), hex_strings=True), labels, strict=True)
+    )
+    drawing.add(legend)
+
+
+def _apply_series_colors(collection: Any, *, count: int, theme: ReportTheme) -> None:
+    for index, color in enumerate(_palette(theme, count)):
+        collection[index].fillColor = color
+        collection[index].strokeColor = color
+
+
+def _palette(
+    theme: ReportTheme,
+    count: int,
+    *,
+    hex_strings: bool = False,
+) -> list[object]:
+    base = [
+        "#1F5D3A",
+        "#3F8F64",
+        "#2B2B2B",
+        "#6FA987",
+        "#8AA39B",
+        "#C9C9C9",
+        "#4E6E5D",
+        "#7A8C84",
+    ]
+    palette = [
+        theme.primary,
+        theme.accent,
+        theme.dark_grey,
+        *[colors.HexColor(value) for value in base[3:]],
+    ]
+    values = [palette[index % len(palette)] for index in range(count)]
+    if hex_strings:
+        return [base[index % len(base)] for index in range(count)]
+    return values
+
+
+def _require_series(series: tuple[ChartSeries, ...]) -> None:
+    if not series:
+        raise ValueError("Chart requires at least one series.")
+    if not series[0].points:
+        raise ValueError("Chart requires at least one point.")
+    expected = tuple(point.label for point in series[0].points)
+    for item in series:
+        labels = tuple(point.label for point in item.points)
+        if labels != expected:
+            raise ValueError("All chart series must use the same point labels.")
+
+
+def _categories(series: tuple[ChartSeries, ...]) -> list[str]:
+    return [point.label for point in series[0].points]
+
+
+def _series_values(series: ChartSeries) -> tuple[float, ...]:
+    return tuple(_number(point.value) for point in series.points)
+
+
+def _number(value: Number) -> float:
+    return float(value)

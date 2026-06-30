@@ -1,5 +1,18 @@
 """ReportLab-based PDF rendering helpers."""
 
+from retirement_engine.reports.core.renderers.pdf.charts import (
+    BarChartSpec,
+    ChartBlock,
+    ChartBlockSpec,
+    ChartDimensions,
+    ChartPoint,
+    ChartSeries,
+    LineChartSpec,
+    PieChartSpec,
+    bar_chart,
+    line_chart,
+    pie_chart,
+)
 from retirement_engine.reports.core.renderers.pdf.components import (
     ProfessionalLetterTitlePage,
     cover_page,
@@ -30,23 +43,34 @@ from retirement_engine.reports.core.renderers.pdf.layout import (
 from retirement_engine.reports.core.renderers.pdf.renderer import PdfRenderer
 
 __all__ = [
+    "BarChartSpec",
+    "ChartBlock",
+    "ChartBlockSpec",
+    "ChartDimensions",
+    "ChartPoint",
+    "ChartSeries",
     "DocumentSpec",
     "FrameSpec",
     "HeaderFooterSpec",
+    "LineChartSpec",
     "Margins",
     "PageSpec",
     "PdfDocument",
     "PdfRenderer",
+    "PieChartSpec",
     "ProfessionalLetterTitlePage",
     "TemplateRegistry",
     "TemplateSpec",
+    "bar_chart",
     "build_pdf",
     "cover_page",
     "inches",
+    "line_chart",
     "make_doc",
     "make_page_template",
     "navigable_heading",
     "paragraph",
+    "pie_chart",
     "professional_letter_title_page",
     "section_divider",
     "section_heading",
