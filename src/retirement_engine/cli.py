@@ -48,6 +48,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                 workbook,
                 output_dir=context.config.output_directory,
                 output_path=args.output,
+                config=context.config,
             )
             print(result.primary_artifact.resolved_path())
             return 0
