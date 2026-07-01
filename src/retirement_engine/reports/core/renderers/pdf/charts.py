@@ -9,7 +9,7 @@ from reportlab.graphics.charts.barcharts import VerticalBarChart
 from reportlab.graphics.charts.legends import Legend
 from reportlab.graphics.charts.linecharts import HorizontalLineChart
 from reportlab.graphics.charts.piecharts import Pie
-from reportlab.graphics.shapes import Drawing, Line, String
+from reportlab.graphics.shapes import Drawing, Line, Rect, String
 from reportlab.lib import colors
 from reportlab.lib.utils import ImageReader
 from reportlab.platypus import Flowable, Paragraph
@@ -71,6 +71,17 @@ class PieChartSpec:
     title: str
     points: tuple[ChartPoint, ...]
     dimensions: ChartDimensions = ChartDimensions()
+
+
+@dataclass(frozen=True, slots=True)
+class GaugeChartSpec:
+    title: str
+    value: Number
+    target: Number = 1
+    maximum: Number = Decimal("1.5")
+    dimensions: ChartDimensions = ChartDimensions(height=138.0, bottom_padding=28.0)
+    value_label: str | None = None
+    target_label: str = "Target"
 
 
 @dataclass(frozen=True, slots=True)
@@ -138,6 +149,7 @@ class ChartBlock(Flowable):  # type: ignore[misc]
 def bar_chart(spec: BarChartSpec, *, theme: ReportTheme) -> Drawing:
     _require_series(spec.series)
     categories = _categories(spec.series)
+    value_min, value_max = _value_range(spec.series)
     drawing = _base_drawing(spec.title, dimensions=spec.dimensions, theme=theme)
     chart = VerticalBarChart()
     _position_chart(chart, dimensions=spec.dimensions)
@@ -145,7 +157,8 @@ def bar_chart(spec: BarChartSpec, *, theme: ReportTheme) -> Drawing:
     chart.categoryAxis.categoryNames = categories
     chart.categoryAxis.labels.boxAnchor = "ne"
     chart.categoryAxis.labels.angle = 30
-    chart.valueAxis.valueMin = 0
+    chart.valueAxis.valueMin = value_min
+    chart.valueAxis.valueMax = value_max
     chart.valueAxis.visibleGrid = True
     chart.barSpacing = 2
     chart.groupSpacing = 10
@@ -159,6 +172,7 @@ def bar_chart(spec: BarChartSpec, *, theme: ReportTheme) -> Drawing:
 def line_chart(spec: LineChartSpec, *, theme: ReportTheme) -> Drawing:
     _require_series(spec.series)
     categories = _categories(spec.series)
+    value_min, value_max = _value_range(spec.series)
     drawing = _base_drawing(spec.title, dimensions=spec.dimensions, theme=theme)
     chart = HorizontalLineChart()
     _position_chart(chart, dimensions=spec.dimensions)
@@ -166,7 +180,8 @@ def line_chart(spec: LineChartSpec, *, theme: ReportTheme) -> Drawing:
     chart.categoryAxis.categoryNames = categories
     chart.categoryAxis.labels.boxAnchor = "ne"
     chart.categoryAxis.labels.angle = 30
-    chart.valueAxis.valueMin = 0
+    chart.valueAxis.valueMin = value_min
+    chart.valueAxis.valueMax = value_max
     chart.valueAxis.visibleGrid = True
     chart.joinedLines = True
     _apply_series_colors(chart.lines, count=len(spec.series), theme=theme)
@@ -194,6 +209,75 @@ def pie_chart(spec: PieChartSpec, *, theme: ReportTheme) -> Drawing:
         pie.slices[index].fillColor = color
     drawing.add(pie)
     _add_legend(drawing, [point.label for point in spec.points], dimensions, theme=theme)
+    return drawing
+
+
+def gauge_chart(spec: GaugeChartSpec, *, theme: ReportTheme) -> Drawing:
+    maximum = max(_number(spec.maximum), 1.0)
+    target = min(max(_number(spec.target), 0.0), maximum)
+    value = min(max(_number(spec.value), 0.0), maximum)
+    dimensions = spec.dimensions
+    drawing = _base_drawing(spec.title, dimensions=dimensions, theme=theme)
+
+    bar_x = dimensions.left_padding
+    bar_y = dimensions.bottom_padding + 28
+    bar_width = dimensions.plot_width
+    bar_height = 22
+    fill_width = bar_width * (value / maximum)
+    target_x = bar_x + (bar_width * (target / maximum))
+
+    drawing.add(
+        Rect(
+            bar_x,
+            bar_y,
+            bar_width,
+            bar_height,
+            fillColor=theme.light_grey,
+            strokeColor=theme.light_grey,
+            strokeWidth=0.5,
+        )
+    )
+    drawing.add(
+        Rect(
+            bar_x,
+            bar_y,
+            fill_width,
+            bar_height,
+            fillColor=theme.primary,
+            strokeColor=theme.primary,
+            strokeWidth=0.5,
+        )
+    )
+    drawing.add(
+        Line(
+            target_x,
+            bar_y - 5,
+            target_x,
+            bar_y + bar_height + 5,
+            strokeColor=theme.dark_grey,
+            strokeWidth=1,
+        )
+    )
+    drawing.add(
+        String(
+            bar_x,
+            bar_y + bar_height + 14,
+            spec.value_label or f"{_number(spec.value) * 100:,.1f}%",
+            fontName=theme.body_semibold_font,
+            fontSize=12,
+            fillColor=theme.dark_grey,
+        )
+    )
+    drawing.add(
+        String(
+            target_x - 12,
+            bar_y - 16,
+            spec.target_label,
+            fontName=theme.body_font,
+            fontSize=7,
+            fillColor=theme.dark_grey,
+        )
+    )
     return drawing
 
 
@@ -329,6 +413,19 @@ def _categories(series: tuple[ChartSeries, ...]) -> list[str]:
 
 def _series_values(series: ChartSeries) -> tuple[float, ...]:
     return tuple(_number(point.value) for point in series.points)
+
+
+def _value_range(series: tuple[ChartSeries, ...]) -> tuple[float, float]:
+    values = [value for item in series for value in _series_values(item)]
+    minimum = min(values)
+    maximum = max(values)
+    if minimum == maximum:
+        if minimum == 0:
+            return 0, 1
+        padding = abs(minimum) * 0.1
+        return minimum - padding, maximum + padding
+    padding = (maximum - minimum) * 0.08
+    return min(0, minimum - padding), max(0, maximum + padding)
 
 
 def _number(value: Number) -> float:

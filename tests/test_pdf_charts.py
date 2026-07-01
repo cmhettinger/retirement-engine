@@ -9,9 +9,11 @@ from retirement_engine.reports.core.renderers.pdf import (
     BarChartSpec,
     ChartPoint,
     ChartSeries,
+    GaugeChartSpec,
     LineChartSpec,
     PieChartSpec,
     bar_chart,
+    gauge_chart,
     line_chart,
     pie_chart,
 )
@@ -41,6 +43,7 @@ def test_native_bar_line_and_pie_charts_render_to_pdf(tmp_path: Path) -> None:
     drawings = [
         bar_chart(BarChartSpec(title="Income vs expenses", series=series), theme=theme),
         line_chart(LineChartSpec(title="Portfolio trend", series=series), theme=theme),
+        gauge_chart(GaugeChartSpec(title="Funded ratio", value=1.12), theme=theme),
         pie_chart(
             PieChartSpec(
                 title="Asset mix",
