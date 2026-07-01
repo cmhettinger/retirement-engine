@@ -82,6 +82,7 @@ class GaugeChartSpec:
     dimensions: ChartDimensions = ChartDimensions(height=138.0, bottom_padding=28.0)
     value_label: str | None = None
     target_label: str = "Target"
+    maximum_label: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -273,6 +274,26 @@ def gauge_chart(spec: GaugeChartSpec, *, theme: ReportTheme) -> Drawing:
             target_x - 12,
             bar_y - 16,
             spec.target_label,
+            fontName=theme.body_font,
+            fontSize=7,
+            fillColor=theme.dark_grey,
+        )
+    )
+    drawing.add(
+        String(
+            bar_x,
+            bar_y - 16,
+            "0%",
+            fontName=theme.body_font,
+            fontSize=7,
+            fillColor=theme.dark_grey,
+        )
+    )
+    drawing.add(
+        String(
+            bar_x + bar_width - 34,
+            bar_y - 16,
+            spec.maximum_label or f"{maximum * 100:,.0f}% scale",
             fontName=theme.body_font,
             fontSize=7,
             fillColor=theme.dark_grey,

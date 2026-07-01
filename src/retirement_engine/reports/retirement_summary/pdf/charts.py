@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Iterable
 from dataclasses import dataclass
-from decimal import Decimal
+from decimal import ROUND_CEILING, Decimal
 
 from retirement_engine.projections import AnnualProjectionRow
 from retirement_engine.reports.core.renderers.pdf import (
@@ -56,11 +56,14 @@ def build_retirement_summary_chart_set(
 
 def _readiness_gauge(context: RetirementSummaryPdfContext) -> GaugeChartSpec:
     funded_ratio = context.readiness.funded_ratio or Decimal(0)
+    maximum = _readiness_gauge_maximum(funded_ratio)
     return GaugeChartSpec(
         title="Funded Ratio / Readiness Gauge",
         value=funded_ratio,
+        maximum=maximum,
         value_label=_percent(funded_ratio),
         target_label="100% funded",
+        maximum_label=f"{_percent(maximum)} scale",
     )
 
 
@@ -235,6 +238,14 @@ def _positive_points(totals: dict[str, Decimal]) -> tuple[ChartPoint, ...]:
 
 def _percent(value: Decimal) -> str:
     return f"{value * Decimal(100):,.1f}%"
+
+
+def _readiness_gauge_maximum(value: Decimal) -> Decimal:
+    minimum = Decimal("1.5")
+    rounded_value = (value / Decimal("0.5")).to_integral_value(
+        rounding=ROUND_CEILING
+    ) * Decimal("0.5")
+    return max(minimum, rounded_value)
 
 
 __all__ = [

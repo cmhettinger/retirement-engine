@@ -9,16 +9,13 @@ from typing import Any
 
 from reportlab.platypus import PageBreak, Paragraph, Table, TableStyle
 
-from retirement_engine.analysis import (
-    HouseholdExpenseSummary,
-    RetirementReadinessEstimate,
-)
+from retirement_engine.analysis import HouseholdExpenseSummary
 from retirement_engine.config import AppConfig
-from retirement_engine.projections import RetirementDateEstimate
 from retirement_engine.reports.core.contracts import RenderContext, RenderResult, ReportMetadata
 from retirement_engine.reports.core.renderers.pdf import (
     HeaderFooterSpec,
     PdfRenderer,
+    gauge_chart,
     navigable_heading,
     paragraph,
     professional_letter_title_page,
@@ -27,6 +24,9 @@ from retirement_engine.reports.core.renderers.pdf import (
     table_of_contents,
 )
 from retirement_engine.reports.core.renderers.pdf.tables import simple_table
+from retirement_engine.reports.retirement_summary.pdf.charts import (
+    build_retirement_summary_chart_set,
+)
 from retirement_engine.reports.retirement_summary.pdf.context import (
     RetirementSummaryPdfContext,
     build_retirement_summary_pdf_context,
@@ -104,27 +104,31 @@ def _body_story(
 ) -> list[Any]:
     styles = renderer.styles
     expense_summary = report_context.expense_summary
-    readiness = report_context.readiness
-    retirement_dates = report_context.retirement_dates
+    charts = build_retirement_summary_chart_set(report_context)
 
     return [
         *section_divider(
             "Executive Summary",
             styles=styles,
-            subtitle="Current readiness, balance-sheet snapshot, and near-term planning notes.",
+            subtitle="Deterministic retirement readiness and current-data planning dashboard.",
             bookmark="executive-summary",
         ),
-        paragraph(_executive_summary(expense_summary, readiness), styles=styles),
+        navigable_heading(
+            "Retirement Readiness Dashboard",
+            styles=styles,
+            level=1,
+            bookmark="readiness-dashboard",
+        ),
+        paragraph(_plain_language_assessment(report_context), styles=styles),
         spacer(6),
-        _snapshot_table(expense_summary, readiness, retirement_dates, renderer=renderer),
-        spacer(12),
-        navigable_heading("Household", styles=styles, level=1, bookmark="household"),
-        _household_table(
-            report_context.workbook_summary.people,
-            report_context.generated_at,
-            workbook_version=report_context.workbook_version,
-            engine_version=report_context.engine_version,
-            renderer=renderer,
+        gauge_chart(charts.readiness_gauge, theme=renderer.theme),
+        spacer(8),
+        _readiness_dashboard_table(report_context, renderer=renderer),
+        spacer(6),
+        Paragraph(
+            "Probability of success is intentionally deferred until the Monte Carlo "
+            "analysis tasks add simulation-backed results.",
+            styles.small,
         ),
         spacer(12),
         navigable_heading("Balance Sheet", styles=styles, level=1, bookmark="balance-sheet"),
@@ -165,63 +169,73 @@ def _body_story(
     ]
 
 
-def _executive_summary(
-    expense_summary: HouseholdExpenseSummary,
-    readiness: RetirementReadinessEstimate,
-) -> str:
-    status = readiness.status.replace("_", " ")
+def _plain_language_assessment(report_context: RetirementSummaryPdfContext) -> str:
+    readiness = report_context.readiness
+    retirement_dates = report_context.retirement_dates
+    status = _status_label(readiness.status)
+    funded_ratio = _percent(readiness.funded_ratio)
+    projected_assets = _currency(readiness.projected_retirement_assets)
+    required_assets = _currency(readiness.required_retirement_assets)
+    surplus_or_shortfall = _currency(readiness.surplus_or_shortfall)
+    earliest_year = _optional_year(retirement_dates.earliest_viable_retirement_year)
+
+    if readiness.surplus_or_shortfall >= 0:
+        assessment = (
+            f"The current deterministic plan appears to be on track. Projected "
+            f"retirement assets of <b>{projected_assets}</b> exceed the estimated "
+            f"required assets of <b>{required_assets}</b>, leaving an estimated "
+            f"surplus of <b>{surplus_or_shortfall}</b>."
+        )
+    else:
+        assessment = (
+            f"The current deterministic plan shows a funding gap. Projected "
+            f"retirement assets of <b>{projected_assets}</b> are below the estimated "
+            f"required assets of <b>{required_assets}</b>, leaving an estimated "
+            f"shortfall of <b>{surplus_or_shortfall}</b>."
+        )
+
     return (
-        f"The deterministic retirement summary is currently <b>{status}</b>. "
-        f"Annual spending need is <b>{_currency(expense_summary.annual_spending_need)}</b>, "
-        f"annual withdrawal need is <b>{_currency(readiness.annual_withdrawal_need)}</b>, "
-        f"and the estimated surplus or shortfall is "
-        f"<b>{_currency(readiness.surplus_or_shortfall)}</b>."
+        f"The readiness status is <b>{status}</b> with a funded ratio of "
+        f"<b>{funded_ratio}</b>. {assessment} The planned retirement year is "
+        f"<b>{retirement_dates.planned_retirement_year}</b>; the earliest viable "
+        f"year identified by the current deterministic date estimator is "
+        f"<b>{earliest_year}</b>."
     )
 
 
-def _snapshot_table(
-    expense_summary: HouseholdExpenseSummary,
-    readiness: RetirementReadinessEstimate,
-    retirement_dates: RetirementDateEstimate,
+def _readiness_dashboard_table(
+    report_context: RetirementSummaryPdfContext,
     *,
     renderer: PdfRenderer,
 ) -> Table:
-    rows = [
-        ["Metric", "Value"],
-        ["Annual spending need", _currency(expense_summary.annual_spending_need)],
-        ["Monthly spending need", _currency(expense_summary.monthly_spending_need)],
-        ["Must-pay annual spending", _currency(expense_summary.annual_must_pay_spending)],
-        ["Optional annual spending", _currency(expense_summary.annual_optional_spending)],
-        ["Replacement reserve", _currency(expense_summary.annual_replacement_reserve)],
-        ["Estimated income", _currency(expense_summary.annual_retirement_income)],
-        ["Annual withdrawal need", _currency(readiness.annual_withdrawal_need)],
-        ["Status", readiness.status.replace("_", " ")],
-        ["Planned retirement year", str(retirement_dates.planned_retirement_year)],
-        ["Earliest viable year", _optional_year(retirement_dates.earliest_viable_retirement_year)],
-        ["Funded ratio", _percent(readiness.funded_ratio)],
-    ]
+    rows = _readiness_dashboard_rows(report_context)
     return _number_table(rows, renderer=renderer)
 
 
-def _household_table(
-    people: tuple[str, ...],
-    generated_at: datetime,
-    *,
-    workbook_version: str,
-    engine_version: str,
-    renderer: PdfRenderer,
-) -> Table:
-    return simple_table(
+def _readiness_dashboard_rows(report_context: RetirementSummaryPdfContext) -> list[list[str]]:
+    readiness = report_context.readiness
+    retirement_dates = report_context.retirement_dates
+    expense_summary = report_context.expense_summary
+    estimated_ending_estate = _estimated_ending_estate(report_context)
+
+    rows = [
+        ["Metric", "Value"],
+        ["Deterministic readiness status", _status_label(readiness.status)],
+        ["Funded ratio", _percent(readiness.funded_ratio)],
+        ["Planned retirement year", str(retirement_dates.planned_retirement_year)],
         [
-            ["Field", "Value"],
-            ["People", _household_name(people)],
-            ["Workbook version", workbook_version],
-            ["Engine version", engine_version],
-            ["Generated date", generated_at.date().isoformat()],
-            ["Generated time", generated_at.isoformat(timespec="seconds")],
+            "Earliest viable retirement year",
+            _optional_year(retirement_dates.earliest_viable_retirement_year),
         ],
-        theme=renderer.theme,
-    )
+        ["Planning horizon", f"{readiness.planning_horizon_years} years"],
+        ["Annual retirement income", _currency(expense_summary.annual_retirement_income)],
+        ["Annual retirement spending", _currency(expense_summary.annual_spending_need)],
+        ["Projected portfolio assets", _currency(readiness.projected_retirement_assets)],
+        ["Estimated ending estate", _currency(estimated_ending_estate)],
+        ["Annual withdrawal need", _currency(readiness.annual_withdrawal_need)],
+        ["Estimated surplus / shortfall", _currency(readiness.surplus_or_shortfall)],
+    ]
+    return rows
 
 
 def _report_metadata_table(
@@ -293,6 +307,17 @@ def _percent(value: Decimal | None) -> str:
     return f"{value * Decimal(100):,.1f}%"
 
 
+def _estimated_ending_estate(report_context: RetirementSummaryPdfContext) -> Decimal:
+    rows = report_context.annual_projection.rows
+    if not rows:
+        return Decimal(0)
+    return rows[-1].ending_portfolio
+
+
+def _status_label(value: str) -> str:
+    return value.replace("_", " ").title()
+
+
 def _optional_year(value: int | None) -> str:
     if value is None:
         return "n/a"
@@ -303,4 +328,3 @@ def _household_name(people: tuple[str, ...]) -> str:
     if not people:
         return "Household"
     return " and ".join(people)
-

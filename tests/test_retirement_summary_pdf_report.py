@@ -16,6 +16,10 @@ from retirement_engine.reports.retirement_summary.pdf import (
     build_retirement_summary_pdf_context,
     render_retirement_summary_pdf,
 )
+from retirement_engine.reports.retirement_summary.pdf.render import (
+    _plain_language_assessment,
+    _readiness_dashboard_rows,
+)
 from retirement_engine.workbook import load_retirement_workbook
 
 
@@ -71,6 +75,8 @@ def test_build_retirement_summary_chart_set_covers_current_data_charts() -> None
 
     assert charts.readiness_gauge.title == "Funded Ratio / Readiness Gauge"
     assert charts.readiness_gauge.value == context.readiness.funded_ratio
+    assert charts.readiness_gauge.maximum == 3
+    assert charts.readiness_gauge.maximum_label == "300.0% scale"
     assert charts.spending_breakdown.points
     assert charts.must_pay_vs_optional_spending.points
     assert charts.income_mix.points
@@ -82,6 +88,44 @@ def test_build_retirement_summary_chart_set_covers_current_data_charts() -> None
     assert charts.annual_surplus_deficit.series[0].points
     assert charts.annual_withdrawals.series[0].points
     assert charts.cumulative_withdrawals.series[0].points[-1].value > 0
+
+
+def test_executive_readiness_dashboard_uses_current_deterministic_metrics() -> None:
+    config = load_config()
+    workbook = load_retirement_workbook(config.default_workbook)
+    generated_at = datetime(2026, 6, 30, 9, 15)
+    context = build_retirement_summary_pdf_context(
+        workbook,
+        generated_at=generated_at,
+        config=config,
+    )
+
+    rows = _readiness_dashboard_rows(context)
+    labels = [row[0] for row in rows]
+    assessment = _plain_language_assessment(context)
+
+    assert labels == [
+        "Metric",
+        "Deterministic readiness status",
+        "Funded ratio",
+        "Planned retirement year",
+        "Earliest viable retirement year",
+        "Planning horizon",
+        "Annual retirement income",
+        "Annual retirement spending",
+        "Projected portfolio assets",
+        "Estimated ending estate",
+        "Annual withdrawal need",
+        "Estimated surplus / shortfall",
+    ]
+    assert rows[1][1] == "On Track"
+    assert rows[2][1].endswith("%")
+    assert rows[3][1] == str(context.retirement_dates.planned_retirement_year)
+    assert rows[4][1] == str(context.retirement_dates.earliest_viable_retirement_year)
+    assert rows[5][1] == f"{context.readiness.planning_horizon_years} years"
+    assert "Probability of success" not in labels
+    assert "funded ratio" in assessment
+    assert str(context.retirement_dates.planned_retirement_year) in assessment
 
 
 def test_retirement_summary_chart_set_renders_to_pdf(tmp_path: Path) -> None:
