@@ -18,6 +18,7 @@ from retirement_engine.reports.retirement_summary.pdf import (
     render_retirement_summary_pdf,
 )
 from retirement_engine.reports.retirement_summary.pdf.render import (
+    _financial_snapshot_rows,
     _plain_language_assessment,
     _readiness_dashboard_rows,
 )
@@ -159,6 +160,40 @@ def test_findings_action_plan_uses_current_evidence() -> None:
     )
     assert all(action.expected_benefit for action in plan.actions)
     assert all(action.evidence for action in plan.actions)
+
+
+def test_household_financial_snapshot_rows_use_current_rollups() -> None:
+    config = load_config()
+    workbook = load_retirement_workbook(config.default_workbook)
+    generated_at = datetime(2026, 6, 30, 9, 15)
+    context = build_retirement_summary_pdf_context(
+        workbook,
+        generated_at=generated_at,
+        config=config,
+    )
+
+    rows = _financial_snapshot_rows(context)
+    values = {label: value for label, value in rows[1:]}
+
+    assert [row[0] for row in rows] == [
+        "Metric",
+        "Retirement assets",
+        "Total assets",
+        "Total liabilities",
+        "Net worth",
+        "Monthly debt payments",
+        "Annual debt payments",
+        "Cash bucket assets",
+        "Desired cash reserve",
+        "Cash reserve surplus / gap",
+    ]
+    assert values["Total assets"] == "$2,401,000"
+    assert values["Retirement assets"] == "$1,706,000"
+    assert values["Total liabilities"] == "$261,300"
+    assert values["Net worth"] == "$2,139,700"
+    assert values["Cash bucket assets"] == "$137,000"
+    assert values["Desired cash reserve"] == "$45,000"
+    assert values["Cash reserve surplus / gap"] == "$92,000"
 
 
 def test_retirement_summary_chart_set_renders_to_pdf(tmp_path: Path) -> None:

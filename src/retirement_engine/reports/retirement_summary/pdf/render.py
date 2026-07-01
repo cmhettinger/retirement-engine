@@ -16,9 +16,12 @@ from retirement_engine.reports.core.contracts import RenderContext, RenderResult
 from retirement_engine.reports.core.renderers.pdf import (
     HeaderFooterSpec,
     PdfRenderer,
+    bar_chart,
     gauge_chart,
+    line_chart,
     navigable_heading,
     paragraph,
+    pie_chart,
     professional_letter_title_page,
     section_divider,
     spacer,
@@ -163,11 +166,106 @@ def _body_story(
         spacer(12),
         _actions_table(findings.actions, renderer=renderer),
         spacer(12),
-        navigable_heading("Balance Sheet", styles=styles, level=1, bookmark="balance-sheet"),
-        _balance_sheet_table(expense_summary, renderer=renderer),
+        *section_divider(
+            "Current Financial Picture",
+            styles=styles,
+            subtitle=(
+                "Balance sheet, debt, cash reserve, and allocation snapshot "
+                "from current workbook assets and liabilities."
+            ),
+            bookmark="current-financial-picture",
+        ),
+        navigable_heading(
+            "Household Financial Snapshot",
+            styles=styles,
+            level=1,
+            bookmark="household-financial-snapshot",
+        ),
+        paragraph(
+            "This page summarizes today's financial position using the current "
+            "asset and liability rollups. Cash reserve coverage compares the "
+            "workbook cash bucket with the desired cash reserve assumption; it "
+            "is not a separate emergency-fund model.",
+            styles=styles,
+        ),
+        _financial_snapshot_table(report_context, renderer=renderer),
+        spacer(10),
+        bar_chart(charts.net_worth_allocation, theme=renderer.theme),
+        PageBreak(),
+        navigable_heading(
+            "Assets and Tax Buckets",
+            styles=styles,
+            level=1,
+            bookmark="assets-tax-buckets",
+        ),
+        _asset_rollup_table(report_context, renderer=renderer),
+        spacer(10),
+        navigable_heading(
+            "Liabilities and Debt Payments",
+            styles=styles,
+            level=1,
+            bookmark="liabilities-debt-payments",
+        ),
+        _liability_rollup_table(report_context, renderer=renderer),
         spacer(12),
         navigable_heading("Insurance", styles=styles, level=1, bookmark="insurance"),
         _insurance_table(expense_summary, renderer=renderer),
+        *section_divider(
+            "Current Data Charts",
+            styles=styles,
+            subtitle=(
+                "Visual summaries generated from current workbook and "
+                "deterministic projection data."
+            ),
+            bookmark="current-data-charts",
+        ),
+        navigable_heading(
+            "Spending and Income Mix",
+            styles=styles,
+            level=1,
+            bookmark="spending-income-mix",
+        ),
+        pie_chart(charts.spending_breakdown, theme=renderer.theme),
+        spacer(10),
+        pie_chart(charts.must_pay_vs_optional_spending, theme=renderer.theme),
+        PageBreak(),
+        navigable_heading(
+            "Income and Asset Allocation",
+            styles=styles,
+            level=1,
+            bookmark="income-asset-allocation",
+        ),
+        pie_chart(charts.income_mix, theme=renderer.theme),
+        spacer(10),
+        pie_chart(charts.asset_allocation_by_tax_treatment, theme=renderer.theme),
+        PageBreak(),
+        navigable_heading(
+            "Portfolio and Cash Flow Projection",
+            styles=styles,
+            level=1,
+            bookmark="portfolio-cash-flow-projection",
+        ),
+        line_chart(charts.portfolio_balance_over_time, theme=renderer.theme),
+        spacer(10),
+        line_chart(charts.income_vs_expenses, theme=renderer.theme),
+        PageBreak(),
+        navigable_heading(
+            "Withdrawal Projection",
+            styles=styles,
+            level=1,
+            bookmark="withdrawal-projection",
+        ),
+        bar_chart(charts.annual_surplus_deficit, theme=renderer.theme),
+        spacer(10),
+        bar_chart(charts.annual_withdrawals, theme=renderer.theme),
+        PageBreak(),
+        navigable_heading(
+            "Cumulative Withdrawals",
+            styles=styles,
+            level=1,
+            bookmark="cumulative-withdrawals",
+        ),
+        line_chart(charts.cumulative_withdrawals, theme=renderer.theme),
         *section_divider(
             "Action Plan",
             styles=styles,
@@ -319,18 +417,90 @@ def _report_metadata_table(
     )
 
 
-def _balance_sheet_table(
-    expense_summary: HouseholdExpenseSummary,
+def _financial_snapshot_table(
+    report_context: RetirementSummaryPdfContext,
     *,
     renderer: PdfRenderer,
 ) -> Table:
+    rows = _financial_snapshot_rows(report_context)
+    return _number_table(rows, renderer=renderer)
+
+
+def _financial_snapshot_rows(report_context: RetirementSummaryPdfContext) -> list[list[str]]:
+    expense_summary = report_context.expense_summary
+    readiness = report_context.readiness
+    cash_assets = report_context.asset_rollup.by_tax_bucket.get("cash", Decimal(0))
+    desired_cash_reserve = readiness.desired_cash_reserve
+    cash_reserve_gap = cash_assets - desired_cash_reserve
     rows = [
         ["Metric", "Value"],
         ["Retirement assets", _currency(expense_summary.retirement_assets)],
         ["Total assets", _currency(expense_summary.total_assets)],
         ["Total liabilities", _currency(expense_summary.total_liabilities)],
         ["Net worth", _currency(expense_summary.net_worth)],
+        ["Monthly debt payments", _currency(report_context.liability_rollup.monthly_debt_payments)],
+        ["Annual debt payments", _currency(expense_summary.annual_debt_payments)],
+        ["Cash bucket assets", _currency(cash_assets)],
+        ["Desired cash reserve", _currency(desired_cash_reserve)],
+        ["Cash reserve surplus / gap", _currency(cash_reserve_gap)],
     ]
+    return rows
+
+
+def _asset_rollup_table(
+    report_context: RetirementSummaryPdfContext,
+    *,
+    renderer: PdfRenderer,
+) -> Table:
+    rows = [["Asset Group", "Balance"]]
+    rows.extend(
+        [
+            _tax_bucket_label(label),
+            _currency(value),
+        ]
+        for label, value in _sorted_rollup_items(report_context.asset_rollup.by_tax_bucket)
+    )
+    rows.append(
+        ["Retirement asset total", _currency(report_context.asset_rollup.retirement_assets)]
+    )
+    rows.append(["Asset accounts with balances", str(report_context.asset_rollup.item_count)])
+    return _number_table(rows, renderer=renderer)
+
+
+def _liability_rollup_table(
+    report_context: RetirementSummaryPdfContext,
+    *,
+    renderer: PdfRenderer,
+) -> Table:
+    rows = [["Liability Group", "Balance / Payment"]]
+    rows.extend(
+        [
+            label,
+            _currency(value),
+        ]
+        for label, value in _sorted_rollup_items(report_context.liability_rollup.by_liability_type)
+    )
+    rows.extend(
+        [
+            [
+                "Monthly debt payments",
+                _currency(report_context.liability_rollup.monthly_debt_payments),
+            ],
+            [
+                "Annual debt payments",
+                _currency(report_context.liability_rollup.annual_debt_payments),
+            ],
+            [
+                "Earliest payoff year",
+                _optional_year(report_context.liability_rollup.earliest_payoff_year),
+            ],
+            [
+                "Latest payoff year",
+                _optional_year(report_context.liability_rollup.latest_payoff_year),
+            ],
+            ["Liabilities with balances", str(report_context.liability_rollup.item_count)],
+        ]
+    )
     return _number_table(rows, renderer=renderer)
 
 
@@ -440,6 +610,23 @@ def _number_table(rows: list[list[str]], *, renderer: PdfRenderer) -> Table:
     table = simple_table(rows, theme=renderer.theme)
     table.setStyle(TableStyle([("ALIGN", (1, 1), (-1, -1), "RIGHT")]))
     return table
+
+
+def _sorted_rollup_items(values: dict[str, Decimal]) -> list[tuple[str, Decimal]]:
+    return sorted(values.items(), key=lambda item: (-item[1], item[0]))
+
+
+def _tax_bucket_label(value: str) -> str:
+    labels = {
+        "pre_tax": "Pre-tax",
+        "roth": "Roth",
+        "taxable": "Taxable",
+        "cash": "Cash",
+        "hsa": "HSA",
+        "real_estate": "Real estate",
+        "unclassified": "Unclassified",
+    }
+    return labels.get(value, value.replace("_", " ").title())
 
 
 def _currency(value: Decimal) -> str:

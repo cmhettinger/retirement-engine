@@ -9,6 +9,7 @@ from decimal import ROUND_CEILING, Decimal
 from retirement_engine.projections import AnnualProjectionRow
 from retirement_engine.reports.core.renderers.pdf import (
     BarChartSpec,
+    ChartDimensions,
     ChartPoint,
     ChartSeries,
     GaugeChartSpec,
@@ -16,6 +17,9 @@ from retirement_engine.reports.core.renderers.pdf import (
     PieChartSpec,
 )
 from retirement_engine.reports.retirement_summary.pdf.context import RetirementSummaryPdfContext
+
+PIE_CHART_DIMENSIONS = ChartDimensions(height=320.0, top_padding=72.0, bottom_padding=54.0)
+PROJECTION_CHART_DIMENSIONS = ChartDimensions(height=300.0, bottom_padding=72.0)
 
 
 @dataclass(frozen=True)
@@ -69,7 +73,7 @@ def _readiness_gauge(context: RetirementSummaryPdfContext) -> GaugeChartSpec:
 
 def _spending_breakdown(context: RetirementSummaryPdfContext) -> PieChartSpec:
     totals = _sum_points(
-        (row.category or "Unclassified", row.annual_equivalent)
+        (_spending_label(row.category), row.annual_equivalent)
         for row in context.budget_rows
         if row.has_amount
     )
@@ -78,7 +82,11 @@ def _spending_breakdown(context: RetirementSummaryPdfContext) -> PieChartSpec:
             totals.get("Replacement reserves", Decimal(0))
             + context.expense_summary.annual_replacement_reserve
         )
-    return PieChartSpec(title="Spending Breakdown", points=_positive_points(totals))
+    return PieChartSpec(
+        title="Spending Breakdown",
+        points=_positive_points(totals, max_points=8),
+        dimensions=PIE_CHART_DIMENSIONS,
+    )
 
 
 def _must_pay_vs_optional_spending(context: RetirementSummaryPdfContext) -> PieChartSpec:
@@ -91,6 +99,7 @@ def _must_pay_vs_optional_spending(context: RetirementSummaryPdfContext) -> PieC
                 "Replacement reserves": context.expense_summary.annual_replacement_reserve,
             }
         ),
+        dimensions=PIE_CHART_DIMENSIONS,
     )
 
 
@@ -100,13 +109,18 @@ def _income_mix(context: RetirementSummaryPdfContext) -> PieChartSpec:
         for row in context.income_rows
         if row.has_amount
     )
-    return PieChartSpec(title="Income Mix", points=_positive_points(totals))
+    return PieChartSpec(
+        title="Income Mix",
+        points=_positive_points(totals, max_points=8),
+        dimensions=PIE_CHART_DIMENSIONS,
+    )
 
 
 def _asset_allocation_by_tax_treatment(context: RetirementSummaryPdfContext) -> PieChartSpec:
     return PieChartSpec(
         title="Asset Allocation by Tax Treatment",
         points=_positive_points(context.asset_rollup.by_tax_treatment),
+        dimensions=PIE_CHART_DIMENSIONS,
     )
 
 
@@ -138,6 +152,7 @@ def _portfolio_balance_over_time(
                 tuple(ChartPoint(str(row.calendar_year), row.ending_portfolio) for row in rows),
             ),
         ),
+        dimensions=PROJECTION_CHART_DIMENSIONS,
         value_axis_label="Dollars",
     )
 
@@ -155,6 +170,7 @@ def _income_vs_expenses(rows: tuple[AnnualProjectionRow, ...]) -> LineChartSpec:
                 tuple(ChartPoint(str(row.calendar_year), row.annual_expenses) for row in rows),
             ),
         ),
+        dimensions=PROJECTION_CHART_DIMENSIONS,
         value_axis_label="Dollars",
     )
 
@@ -174,6 +190,7 @@ def _annual_surplus_deficit(rows: tuple[AnnualProjectionRow, ...]) -> BarChartSp
                 ),
             ),
         ),
+        dimensions=PROJECTION_CHART_DIMENSIONS,
         value_axis_label="Dollars",
     )
 
@@ -187,6 +204,7 @@ def _annual_withdrawals(rows: tuple[AnnualProjectionRow, ...]) -> BarChartSpec:
                 tuple(ChartPoint(str(row.calendar_year), row.withdrawal) for row in rows),
             ),
         ),
+        dimensions=PROJECTION_CHART_DIMENSIONS,
         value_axis_label="Dollars",
     )
 
@@ -200,6 +218,7 @@ def _cumulative_withdrawals(rows: tuple[AnnualProjectionRow, ...]) -> LineChartS
     return LineChartSpec(
         title="Cumulative Withdrawals",
         series=(ChartSeries("Cumulative withdrawals", tuple(points)),),
+        dimensions=PROJECTION_CHART_DIMENSIONS,
         value_axis_label="Dollars",
     )
 
@@ -225,15 +244,30 @@ def _sum_points(items: Iterable[tuple[str, Decimal]]) -> dict[str, Decimal]:
     return totals
 
 
-def _positive_points(totals: dict[str, Decimal]) -> tuple[ChartPoint, ...]:
-    points = tuple(
-        ChartPoint(label, value)
-        for label, value in sorted(totals.items())
-        if value > 0
-    )
+def _positive_points(
+    totals: dict[str, Decimal],
+    *,
+    max_points: int | None = None,
+) -> tuple[ChartPoint, ...]:
+    positive_items = [(label, value) for label, value in totals.items() if value > 0]
+    positive_items.sort(key=lambda item: (-item[1], item[0]))
+
+    if max_points is not None and len(positive_items) > max_points:
+        visible_items = positive_items[: max_points - 1]
+        other_total = sum((value for _, value in positive_items[max_points - 1 :]), Decimal(0))
+        positive_items = [*visible_items, ("Other", other_total)]
+
+    points = tuple(ChartPoint(label, value) for label, value in positive_items)
     if points:
         return points
     return (ChartPoint("No current data", 1),)
+
+
+def _spending_label(value: str) -> str:
+    label = value or "Unclassified"
+    if label.strip().lower().replace("_", " ") == "replacement reserve":
+        return "Replacement reserves"
+    return label
 
 
 def _percent(value: Decimal) -> str:

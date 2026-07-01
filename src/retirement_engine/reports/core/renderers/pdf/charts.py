@@ -199,9 +199,9 @@ def pie_chart(spec: PieChartSpec, *, theme: ReportTheme) -> Drawing:
     dimensions = spec.dimensions
     drawing = _base_drawing(spec.title, dimensions=dimensions, theme=theme)
     pie = Pie()
-    pie.width = min(dimensions.plot_width * 0.56, dimensions.plot_height)
+    pie.width = min(dimensions.plot_width * 0.48, dimensions.plot_height)
     pie.height = pie.width
-    pie.x = dimensions.left_padding
+    pie.x = dimensions.left_padding + 48
     pie.y = dimensions.bottom_padding
     pie.data = [_number(point.value) for point in spec.points]
     pie.labels = [point.label for point in spec.points]
@@ -209,7 +209,6 @@ def pie_chart(spec: PieChartSpec, *, theme: ReportTheme) -> Drawing:
     for index, color in enumerate(_palette(theme, len(spec.points))):
         pie.slices[index].fillColor = color
     drawing.add(pie)
-    _add_legend(drawing, [point.label for point in spec.points], dimensions, theme=theme)
     return drawing
 
 
