@@ -12,6 +12,7 @@ from retirement_engine.reports.core.renderers.pdf import (
     pie_chart,
 )
 from retirement_engine.reports.retirement_summary.pdf import (
+    build_findings_action_plan,
     build_retirement_summary_chart_set,
     build_retirement_summary_pdf_context,
     render_retirement_summary_pdf,
@@ -126,6 +127,38 @@ def test_executive_readiness_dashboard_uses_current_deterministic_metrics() -> N
     assert "Probability of success" not in labels
     assert "funded ratio" in assessment
     assert str(context.retirement_dates.planned_retirement_year) in assessment
+
+
+def test_findings_action_plan_uses_current_evidence() -> None:
+    config = load_config()
+    workbook = load_retirement_workbook(config.default_workbook)
+    generated_at = datetime(2026, 6, 30, 9, 15)
+    context = build_retirement_summary_pdf_context(
+        workbook,
+        generated_at=generated_at,
+        config=config,
+    )
+
+    plan = build_findings_action_plan(context)
+
+    assert plan.strengths
+    assert plan.risks
+    assert plan.warnings
+    assert plan.actions
+    assert any(finding.title == "Deterministic readiness is on track" for finding in plan.strengths)
+    assert any(
+        finding.title == "Retirement income does not cover projected spending"
+        for finding in plan.risks
+    )
+    assert any(finding.title == "Insurance records have review gaps" for finding in plan.warnings)
+    assert any(
+        action.title == "Review income gap and withdrawal dependency"
+        and action.priority == "High"
+        and action.timeframe == "0-3 months"
+        for action in plan.actions
+    )
+    assert all(action.expected_benefit for action in plan.actions)
+    assert all(action.evidence for action in plan.actions)
 
 
 def test_retirement_summary_chart_set_renders_to_pdf(tmp_path: Path) -> None:

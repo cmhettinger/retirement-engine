@@ -6,6 +6,7 @@ from datetime import datetime
 from decimal import ROUND_HALF_UP, Decimal
 from pathlib import Path
 from typing import Any
+from xml.sax.saxutils import escape
 
 from reportlab.platypus import PageBreak, Paragraph, Table, TableStyle
 
@@ -30,6 +31,11 @@ from retirement_engine.reports.retirement_summary.pdf.charts import (
 from retirement_engine.reports.retirement_summary.pdf.context import (
     RetirementSummaryPdfContext,
     build_retirement_summary_pdf_context,
+)
+from retirement_engine.reports.retirement_summary.pdf.findings import (
+    ExecutiveFinding,
+    RecommendedAction,
+    build_findings_action_plan,
 )
 from retirement_engine.workbook.reader import RetirementWorkbook
 
@@ -105,6 +111,7 @@ def _body_story(
     styles = renderer.styles
     expense_summary = report_context.expense_summary
     charts = build_retirement_summary_chart_set(report_context)
+    findings = build_findings_action_plan(report_context)
 
     return [
         *section_divider(
@@ -131,19 +138,70 @@ def _body_story(
             styles.small,
         ),
         spacer(12),
+        navigable_heading(
+            "Key Findings & Recommendations",
+            styles=styles,
+            level=1,
+            bookmark="key-findings-recommendations",
+        ),
+        paragraph(
+            "These findings translate the current deterministic model into "
+            "evidence-backed planning observations and near-term actions. "
+            "Recommendations that require Monte Carlo, tax, Roth conversion, "
+            "Social Security, or withdrawal-order analysis are intentionally "
+            "deferred until those models exist.",
+            styles=styles,
+        ),
+        _findings_table(
+            (
+                *findings.strengths,
+                *findings.risks,
+                *findings.warnings,
+            ),
+            renderer=renderer,
+        ),
+        spacer(12),
+        _actions_table(findings.actions, renderer=renderer),
+        spacer(12),
         navigable_heading("Balance Sheet", styles=styles, level=1, bookmark="balance-sheet"),
         _balance_sheet_table(expense_summary, renderer=renderer),
         spacer(12),
         navigable_heading("Insurance", styles=styles, level=1, bookmark="insurance"),
         _insurance_table(expense_summary, renderer=renderer),
         *section_divider(
-            "Planning Notes",
+            "Action Plan",
             styles=styles,
             subtitle=(
-                "Warnings and immediate follow-up items from the current "
-                "deterministic summary."
+                "Prioritized planning work supported by current workbook, "
+                "readiness, projection, reserve, liability, and insurance data."
             ),
-            bookmark="planning-notes",
+            bookmark="action-plan",
+        ),
+        navigable_heading(
+            "Recommended Actions",
+            styles=styles,
+            level=1,
+            bookmark="recommended-actions",
+        ),
+        paragraph(
+            "The table below is limited to recommendations supported by current "
+            "engine outputs. Future report tasks can add simulation, tax, "
+            "healthcare, Social Security, and withdrawal-strategy actions once "
+            "their source models are implemented.",
+            styles=styles,
+        ),
+        _actions_table(findings.actions, renderer=renderer),
+        spacer(12),
+        navigable_heading(
+            "Console Summary Cross-Check",
+            styles=styles,
+            level=1,
+            bookmark="console-summary-cross-check",
+        ),
+        paragraph(
+            "These legacy console warnings and next steps remain included as a "
+            "compact cross-check while the richer PDF action plan evolves.",
+            styles=styles,
         ),
         navigable_heading("Warnings", styles=styles, level=1, bookmark="warnings"),
         *_bullets(report_context.warnings, renderer=renderer),
@@ -284,6 +342,94 @@ def _insurance_table(expense_summary: HouseholdExpenseSummary, *, renderer: PdfR
         ["Policies needing review", str(expense_summary.insurance_review_gap_count)],
     ]
     return _number_table(rows, renderer=renderer)
+
+
+def _findings_table(
+    findings: tuple[ExecutiveFinding, ...],
+    *,
+    renderer: PdfRenderer,
+) -> Table:
+    rows: list[list[object]] = [
+        ["Category", "Finding", "Evidence"],
+    ]
+    rows.extend(
+        [
+            finding.category,
+            f"<b>{escape(finding.title)}</b><br/>{escape(finding.summary)}",
+            "<br/>".join(escape(item) for item in finding.evidence),
+        ]
+        for finding in findings
+    )
+    return _wrapped_table(
+        rows,
+        col_widths=[72, 220, 172],
+        renderer=renderer,
+    )
+
+
+def _actions_table(
+    actions: tuple[RecommendedAction, ...],
+    *,
+    renderer: PdfRenderer,
+) -> Table:
+    rows: list[list[object]] = [
+        ["Recommendation", "Evidence", "Expected Benefit", "Priority", "Timeframe"],
+    ]
+    rows.extend(
+        [
+            f"<b>{escape(action.title)}</b><br/>{escape(action.rationale)}",
+            "<br/>".join(escape(item) for item in action.evidence),
+            escape(action.expected_benefit),
+            action.priority,
+            action.timeframe,
+        ]
+        for action in actions
+    )
+    return _wrapped_table(
+        rows,
+        col_widths=[154, 108, 118, 48, 78],
+        renderer=renderer,
+    )
+
+
+def _wrapped_table(
+    rows: list[list[object]],
+    *,
+    col_widths: list[float],
+    renderer: PdfRenderer,
+) -> Table:
+    styles = renderer.styles
+    table_rows = [
+        [
+            Paragraph(
+                str(cell)
+                if row_index
+                else f'<font color="#FFFFFF"><b>{escape(str(cell))}</b></font>',
+                styles.small,
+            )
+            for cell in row
+        ]
+        for row_index, row in enumerate(rows)
+    ]
+    table = Table(table_rows, colWidths=col_widths, repeatRows=1)
+    theme = renderer.theme
+    table.setStyle(
+        TableStyle(
+            [
+                ("BACKGROUND", (0, 0), (-1, 0), theme.primary),
+                ("TEXTCOLOR", (0, 0), (-1, 0), theme.white),
+                ("FONTNAME", (0, 0), (-1, 0), theme.body_semibold_font),
+                ("GRID", (0, 0), (-1, -1), 0.25, theme.light_grey),
+                ("ROWBACKGROUNDS", (0, 1), (-1, -1), [theme.white, "#F7F7F7"]),
+                ("VALIGN", (0, 0), (-1, -1), "TOP"),
+                ("LEFTPADDING", (0, 0), (-1, -1), 5),
+                ("RIGHTPADDING", (0, 0), (-1, -1), 5),
+                ("TOPPADDING", (0, 0), (-1, -1), 5),
+                ("BOTTOMPADDING", (0, 0), (-1, -1), 5),
+            ]
+        )
+    )
+    return table
 
 
 def _bullets(items: tuple[str, ...], *, renderer: PdfRenderer) -> list[Paragraph]:
